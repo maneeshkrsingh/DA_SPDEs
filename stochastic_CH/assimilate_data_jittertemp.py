@@ -6,7 +6,7 @@ from firedrake.petsc import PETSc
 from pyadjoint import AdjFloat
 
 from nudging.models.stochastic_Camassa_Holm import Camsholm
-#from nudging.models.stochastic_Camassa_Holm_e import Camsholm1 as Camsholm
+
 
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
@@ -14,19 +14,24 @@ from nudging.models.stochastic_Camassa_Holm import Camsholm
 
 nsteps = 5
 xpoints = 40
-model = Camsholm(100, nsteps, xpoints)
+model = Camsholm(100, nsteps, xpoints, lambdas=True)
 MALA = False
 verbose = False
+nudging = True
+jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
+                             verbose=verbose, MALA=MALA,
+                             nudging=nudging, visualise_tape=False)
+
 
 # jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
 #                              verbose=verbose, MALA=MALA)
 
 # jtfilter = bootstrap_filter()
 
-jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
-                             verbose=verbose, MALA=MALA)
+# jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
+#                              verbose=verbose, MALA=MALA)
 
-nensemble = [1]*30
+nensemble = [5]*30
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -37,7 +42,6 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
     dx1 = model.rg.normal(model.R, 0., 1.05)
     a = model.rg.uniform(model.R, 0., 1.0)
     b = model.rg.uniform(model.R, 0., 1.0)
-    print(dx0, dx1)
     u0_exp = (1+a)*0.2*2/(exp(x-403./15. - dx0) + exp(-x+403./15. + dx0)) \
                     + (1+b)*0.5*2/(exp(x-203./15. - dx1)+exp(-x+203./15. + dx1))
     
@@ -47,7 +51,7 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
 
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.25**2/2*dx
+    ll = (y-Y)**2/0.025**2/2*dx
     return ll
     
 #Load data
