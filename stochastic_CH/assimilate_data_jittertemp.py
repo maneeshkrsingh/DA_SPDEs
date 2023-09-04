@@ -1,6 +1,8 @@
 from firedrake import *
 from nudging import *
 import numpy as np
+import gc
+import petsc4py
 import matplotlib.pyplot as plt
 from firedrake.petsc import PETSc
 from pyadjoint import AdjFloat
@@ -15,12 +17,13 @@ from nudging.models.stochastic_Camassa_Holm import Camsholm
 nsteps = 5
 xpoints = 40
 model = Camsholm(100, nsteps, xpoints, lambdas=True)
+# model = Camsholm(100, nsteps, xpoints)
 MALA = False
 verbose = False
-nudging = True
+nudging = False
 jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
-                             verbose=verbose, MALA=MALA,
-                             nudging=nudging, visualise_tape=False)
+                              verbose=verbose, MALA=MALA,
+                              nudging=nudging, visualise_tape=False)
 
 
 # jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
@@ -31,7 +34,7 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
 #                              verbose=verbose, MALA=MALA)
 
-nensemble = [5]*30
+nensemble = [10]*30
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -82,13 +85,14 @@ if COMM_WORLD.rank == 0:
 
 mylist = []
 def mycallback(ensemble):
+   #x_obs =np.linspace(0, 40,num=self.xpoints, endpoint=False) # This is better choice
    xpt = np.arange(0.5,40.0) # need to change the according to generate data
-   X = ensemble[0]
+   X = ensemble
    mylist.append(X.at(xpt))
 
 
 
-
+ESS_arr = []
 
 # do assimiliation step
 for k in range(N_obs):
@@ -121,7 +125,16 @@ for k in range(N_obs):
                 y_sim_obs_allobs_step[:,nsteps*k+step,m] = y_sim_obs_alltime_step[:, step, m]                
 
     jtfilter.assimilation_step(yVOM, log_likelihood)
+    PETSc.garbage_cleanup(PETSc.COMM_SELF)
+    petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
+    petsc4py.PETSc.garbage_cleanup(model.mesh.comm)
 
+    gc.collect()
+    if COMM_WORLD.rank == 0:
+        # ESS_arr = []
+        # np.append(ESS_arr, jtfilter.ess)
+        ESS_arr.append(jtfilter.ess)
+        
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
         model.w0.assign(jtfilter.ensemble[i][0])
@@ -140,10 +153,12 @@ for k in range(N_obs):
     
 
 if COMM_WORLD.rank == 0:
+    #print(ESS_arr)
     print("Time shape", y_sim_obs_alltime_step.shape)
     #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
+    np.save("ESS_MCMC.npy",np.array((ESS_arr)))
     np.save("assimilated_ensemble.npy", y_e)
     np.save("simualated_all_time_obs.npy", y_sim_obs_allobs_step)
 
