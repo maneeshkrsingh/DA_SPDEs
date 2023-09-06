@@ -13,34 +13,34 @@ Pick initial conditon
 run model, get obseravation
 add observation noise N(0, sigma^2)
 """
-N_obs = 1
+N_obs = 2
 nsteps = 5
-xpoints = 40
+xpoints = 5
 model = Camsholm(100, nsteps, xpoints, lambdas=False)
 model.setup()
 obs_shape = model.obs().dat.data[:]
 x, = SpatialCoordinate(model.mesh)
 
 ###################  To generate data only for obs data points 
-X_truth = model.allocate()
-_, u0 = X_truth[0].split()
-u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
+# X_truth = model.allocate()
+# _, u0 = X_truth[0].split()
+# u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
 
 
 
-# save data at obs points
+# # save data at obs points
 y_true = np.zeros((N_obs, np.size(obs_shape)))
 y_obs = np.zeros((N_obs, np.size(obs_shape)))
 
-for i in range(N_obs):
-    model.randomize(X_truth)
-    model.run(X_truth, X_truth) # run method for every time step
-    y = model.obs().dat.data[:]
-    y_true[i,:] = y
-    y_noise = np.random.normal(0.0, 0.025, xpoints)  
-    y_obs[i,:] =  y + y_noise  
-np.save("y_true.npy", y_true)
-np.save("y_obs.npy", y_obs)
+# for i in range(N_obs):
+#     model.randomize(X_truth)
+#     model.run(X_truth, X_truth) # run method for every time step
+#     y = model.obs().dat.data[:]
+#     y_true[i,:] = y
+#     y_noise = np.random.normal(0.0, 0.025, xpoints)  
+#     y_obs[i,:] =  y + y_noise  
+# # print('y', y_true)
+
 
 
 ###################  To generate data for all time  data points 
@@ -59,6 +59,13 @@ for i in range(N_obs):
     y_noise = np.random.normal(0.0, 0.025, xpoints)
     for j in range(len(z)):
         y_true_alltime[nsteps*i+j,:] = z[j]
-        y_obs_alltime[nsteps*i+j,:] = z[j] + y_noise   
+        y_obs_alltime[nsteps*i+j,:] = z[j] + y_noise
+        if j == len(z)-1:
+           y_true[i,:] =  y_true_alltime[nsteps*i+j,:]
+           y_obs[i,:] =  y_true[i,:] + y_noise
+
+
+np.save("y_true.npy", y_true)
+np.save("y_obs.npy", y_obs)
 np.save("y_true_alltime.npy", y_true_alltime)
 np.save("y_obs_alltime.npy", y_obs_alltime)
