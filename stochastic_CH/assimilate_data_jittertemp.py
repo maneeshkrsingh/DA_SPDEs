@@ -17,10 +17,10 @@ from nudging.models.stochastic_Camassa_Holm import Camsholm
 nsteps = 5
 xpoints = 40
 model = Camsholm(100, nsteps, xpoints, lambdas=True)
-# model = Camsholm(100, nsteps, xpoints)
+
 MALA = False
 verbose = False
-nudging = False
+nudging = True
 jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
@@ -34,7 +34,7 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
 #                              verbose=verbose, MALA=MALA)
 
-nensemble = [10]*30
+nensemble = [4]*5
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -67,6 +67,7 @@ yVOM = Function(model.VVOM)
 # prepare shared arrays for data
 y_e_list = []
 y_sim_obs_list = []
+y_sim_obs_list_new = []
 for m in range(y.shape[1]):        
     y_e_shared = SharedArray(partition=nensemble, 
                                   comm=jtfilter.subcommunicators.ensemble_comm)
@@ -74,12 +75,16 @@ for m in range(y.shape[1]):
                                  comm=jtfilter.subcommunicators.ensemble_comm)
     y_e_list.append(y_e_shared)
     y_sim_obs_list.append(y_sim_obs_shared)
+    y_sim_obs_list_new.append(y_sim_obs_shared)
 
 ys = y.shape
 if COMM_WORLD.rank == 0:
     y_e = np.zeros((np.sum(nensemble), ys[0], ys[1]))
     y_sim_obs_alltime_step = np.zeros((np.sum(nensemble),nsteps,  ys[1]))
     y_sim_obs_allobs_step = np.zeros((np.sum(nensemble),nsteps*N_obs,  ys[1]))
+
+    y_sim_obs_alltime_step_new = np.zeros((np.sum(nensemble),nsteps,  ys[1]))
+    y_sim_obs_allobs_step_new = np.zeros((np.sum(nensemble),nsteps*N_obs,  ys[1]))
     #print(np.shape(y_sim_obs_allobs_step))
 
 
@@ -99,13 +104,28 @@ for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
     yVOM.dat.data[:] = y[k, :]
 
-
+    #z = []
     # make a copy so that we don't overwrite the initial condition
     # in the next step
     for i in  range(nensemble[jtfilter.ensemble_rank]):
+        z = []
         for p in range(len(jtfilter.new_ensemble[i])):
             jtfilter.new_ensemble[i][p].assign(jtfilter.ensemble[i][p])
+            jtfilter.proposal_ensemble[i][p].assign(jtfilter.ensemble[i][p])
         model.randomize(jtfilter.new_ensemble[i])
+        model.randomize(jtfilter.proposal_ensemble[i])
+        z = model.forcast_data_allstep(jtfilter.proposal_ensemble[i])
+        #PETSc.Sys.Print(np.array(z).shape)
+        for step in range(nsteps):
+            for m in range(y.shape[1]):
+                y_sim_obs_list_new[m].dlocal[i] = z[step][m]
+    for step in range(nsteps):
+        for m in range(y.shape[1]):
+            y_sim_obs_list_new[m].synchronise()
+            if COMM_WORLD.rank == 0:
+                y_sim_obs_alltime_step_new[:, step, m] = y_sim_obs_list_new[m].data()
+                y_sim_obs_allobs_step_new[:,nsteps*k+step,m] = y_sim_obs_alltime_step_new[:, step, m]
+
 
     # Compute simulated observations using "prior" distribution
     # i.e. before we have used the observed data
@@ -158,7 +178,11 @@ if COMM_WORLD.rank == 0:
     #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
-    np.save("ESS_MCMC.npy",np.array((ESS_arr)))
+    np.save("MCMC_ESS.npy",np.array((ESS_arr)))
     np.save("assimilated_ensemble.npy", y_e)
     np.save("simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+    np.save("new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
+# Ys_obs = np.load("simualated_all_time_obs.npy")
+# Ys_obs_new = np.load("new_simualated_all_time_obs.npy")
+# print(np.min(Ys_obs_new-Ys_obs))
