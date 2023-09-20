@@ -20,7 +20,7 @@ model = Camsholm(100, nsteps, xpoints, lambdas=True)
 
 MALA = False
 verbose = False
-nudging = True
+nudging = False
 jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
@@ -34,7 +34,7 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
 #                              verbose=verbose, MALA=MALA)
 
-nensemble = [4]*5
+nensemble = [4]*25
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -98,7 +98,7 @@ def mycallback(ensemble):
 
 
 ESS_arr = []
-
+temp_run_count =[]
 # do assimiliation step
 for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
@@ -145,6 +145,7 @@ for k in range(N_obs):
                 y_sim_obs_allobs_step[:,nsteps*k+step,m] = y_sim_obs_alltime_step[:, step, m]                
 
     jtfilter.assimilation_step(yVOM, log_likelihood)
+    #PETSc.Sys.Print("forward model run count", model.run_count - store_run_count)
     PETSc.garbage_cleanup(PETSc.COMM_SELF)
     petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
     petsc4py.PETSc.garbage_cleanup(model.mesh.comm)
@@ -154,6 +155,7 @@ for k in range(N_obs):
         # ESS_arr = []
         # np.append(ESS_arr, jtfilter.ess)
         ESS_arr.append(jtfilter.ess)
+        temp_run_count.append(jtfilter.temp_count)
         
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
@@ -161,6 +163,8 @@ for k in range(N_obs):
         obsdata = model.obs().dat.data[:]
         for m in range(y.shape[1]):
             y_e_list[m].dlocal[i] = obsdata[m]
+
+    #store_run_count = model.run_count
 
 
     
@@ -170,7 +174,8 @@ for k in range(N_obs):
         if COMM_WORLD.rank == 0:
             y_e[:, k, m] = y_e_list[m].data()
 
-    
+
+
 
 if COMM_WORLD.rank == 0:
     #print(ESS_arr)
@@ -178,10 +183,17 @@ if COMM_WORLD.rank == 0:
     #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
-    np.save("MCMC_ESS.npy",np.array((ESS_arr)))
-    np.save("assimilated_ensemble.npy", y_e)
-    np.save("simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-    np.save("new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+    np.save("withoutempMCMC_ESS.npy",np.array((ESS_arr)))
+    #np.save("temp.npy",np.array((temp_run_count)))
+    np.save("withoutempassimilated_ensemble.npy", y_e)
+    np.save("withoutempsimualated_all_time_obs.npy", y_sim_obs_allobs_step)
+    np.save("withoutempnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+    if nudging:
+        np.save("SimplifiedNudge_ESS.npy",np.array((ESS_arr)))
+        np.save("Nudge_temp.npy",np.array((temp_run_count)))
+        np.save("Simplifiednudge_assimilated_ensemble.npy", y_e)
+        np.save("Simplifiednudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("Simplifiednudge_new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
 # Ys_obs = np.load("simualated_all_time_obs.npy")
 # Ys_obs_new = np.load("new_simualated_all_time_obs.npy")
