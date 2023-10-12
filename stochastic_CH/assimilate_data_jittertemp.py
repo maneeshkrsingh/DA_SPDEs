@@ -8,7 +8,9 @@ from firedrake.petsc import PETSc
 from pyadjoint import AdjFloat
 
 from nudging.models.stochastic_Camassa_Holm import Camsholm
+import os
 
+os.makedirs('../../DA_Results/', exist_ok=True)
 
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
@@ -34,7 +36,7 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
 #                              verbose=verbose, MALA=MALA)
 
-nensemble = [4]*25
+nensemble = [4]*10
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -51,6 +53,7 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
 
     _, u = jtfilter.ensemble[i][0].split()
     u.interpolate(u0_exp)
+    # print(u.dat.data[:].shape)
 
 
 def log_likelihood(y, Y):
@@ -58,8 +61,9 @@ def log_likelihood(y, Y):
     return ll
     
 #Load data
-y_exact = np.load('y_true.npy')
-y = np.load('y_obs.npy') 
+y_exact = np.load('../../DA_Results/y_true.npy')
+y = np.load('../../DA_Results/y_obs.npy') 
+
 N_obs = y.shape[0]
 
 yVOM = Function(model.VVOM)
@@ -155,7 +159,7 @@ for k in range(N_obs):
         # ESS_arr = []
         # np.append(ESS_arr, jtfilter.ess)
         ESS_arr.append(jtfilter.ess)
-        temp_run_count.append(jtfilter.temp_count)
+        #temp_run_count.append(jtfilter.temp_count)
         
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
@@ -183,17 +187,17 @@ if COMM_WORLD.rank == 0:
     #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
-    np.save("withoutempMCMC_ESS.npy",np.array((ESS_arr)))
+    np.save("../../DA_Results/withoutempMCMC_ESS.npy",np.array((ESS_arr)))
     #np.save("temp.npy",np.array((temp_run_count)))
-    np.save("withoutempassimilated_ensemble.npy", y_e)
-    np.save("withoutempsimualated_all_time_obs.npy", y_sim_obs_allobs_step)
-    np.save("withoutempnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+    np.save("../../DA_Results/withoutempassimilated_ensemble.npy", y_e)
+    np.save("../../DA_Results/withoutempsimualated_all_time_obs.npy", y_sim_obs_allobs_step)
+    np.save("../../DA_Results/withoutempnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
-        np.save("SimplifiedNudge_ESS.npy",np.array((ESS_arr)))
-        np.save("Nudge_temp.npy",np.array((temp_run_count)))
-        np.save("Simplifiednudge_assimilated_ensemble.npy", y_e)
-        np.save("Simplifiednudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        np.save("Simplifiednudge_new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        np.save("../../DA_Results/SimplifiedNudge_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/Simplifiednudge_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/Simplifiednudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/Simplifiednudge_new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
 # Ys_obs = np.load("simualated_all_time_obs.npy")
 # Ys_obs_new = np.load("new_simualated_all_time_obs.npy")
