@@ -39,42 +39,42 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
 #                              verbose=verbose, MALA=MALA)
 
-nensemble = [3]*5
+nensemble = [5]*10
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
 
 # # elliptic problem to have smoother initial conditions in space
-# p = TestFunction(model.V)
-# q = TrialFunction(model.V)
-# xi = Function(model.V)
-# a = inner(grad(p), grad(q))*dx + p*q*dx
-# L = p*xi*dx
-# dW = Function(model.V) # To insert noise 
-# dW_prob = LinearVariationalProblem(a, L, dW)
-# dw_solver = LinearVariationalSolver(dW_prob,
-#                                          solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
-# for i in range(nensemble[jtfilter.ensemble_rank]):
-#     xi.assign(model.rg.uniform(model.V, 0., 1.0))
-#     dw_solver.solve()
-#     print(dW.dat.data[:].max())
-#     _, u = jtfilter.ensemble[i][0].split()
-#     u.assign(dW)
-
-
-
-##prepare the initial ensemble
+p = TestFunction(model.V)
+q = TrialFunction(model.V)
+xi = Function(model.V) # To insert noise 
+a = inner(grad(p), grad(q))*dx + p*q*dx
+L = p*xi*dx
+dW = Function(model.V) # For soln vector
+dW_prob = LinearVariationalProblem(a, L, dW)
+dw_solver = LinearVariationalSolver(dW_prob,
+                                         solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
 for i in range(nensemble[jtfilter.ensemble_rank]):
-    dx0 = model.rg.normal(model.R, 0., 1.05)
-    dx1 = model.rg.normal(model.R, 0., 1.05)
-    a = model.rg.uniform(model.R, 0., 1.0)
-    b = model.rg.uniform(model.R, 0., 1.0)
-    u0_exp = (1+a)*0.2*2/(exp(x-403./15. - dx0) + exp(-x+403./15. + dx0)) \
-                    + (1+b)*0.5*2/(exp(x-203./15. - dx1)+exp(-x+203./15. + dx1))
+    xi.assign(model.rg.normal(model.V, 0., 0.1))
+    dw_solver.solve()
+    #print(dW.dat.data[:].max())
+    _, u = jtfilter.ensemble[i][0].split()
+    u.assign(dW)
+
+
+
+# ##prepare the initial ensemble
+# for i in range(nensemble[jtfilter.ensemble_rank]):
+#     dx0 = model.rg.normal(model.R, 0., 1.05)
+#     dx1 = model.rg.normal(model.R, 0., 1.05)
+#     a = model.rg.uniform(model.R, 0., 1.0)
+#     b = model.rg.uniform(model.R, 0., 1.0)
+#     u0_exp = (1+a)*0.2*2/(exp(x-403./15. - dx0) + exp(-x+403./15. + dx0)) \
+#                     + (1+b)*0.5*2/(exp(x-203./15. - dx1)+exp(-x+203./15. + dx1))
     
 
-    _, u = jtfilter.ensemble[i][0].split()
-    u.interpolate(u0_exp)
+#     _, u = jtfilter.ensemble[i][0].split()
+#     u.interpolate(u0_exp)
 
 
 def log_likelihood(y, Y):
@@ -82,8 +82,8 @@ def log_likelihood(y, Y):
     return ll
     
 #Load data
-y_exact = np.load('y_true.npy')
-y = np.load('y_obs.npy') 
+y_exact = np.load('../../DA_Results/y_true.npy')
+y = np.load('../../DA_Results/y_obs.npy') 
 N_obs = y.shape[0]
 
 yVOM = Function(model.VVOM)
@@ -137,6 +137,8 @@ for k in range(N_obs):
         for step in range(nsteps):
             for m in range(y.shape[1]):
                 y_sim_obs_list_new[m].dlocal[i] = z[step][m]
+
+                
     for step in range(nsteps):
         for m in range(y.shape[1]):
             y_sim_obs_list_new[m].synchronise()
