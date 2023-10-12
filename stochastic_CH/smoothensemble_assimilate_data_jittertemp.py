@@ -44,22 +44,29 @@ jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
 
-# # elliptic problem to have smoother initial conditions in space
+# # double elliptic problem to have smoother initial conditions in space
 p = TestFunction(model.V)
 q = TrialFunction(model.V)
 xi = Function(model.V) # To insert noise 
 a = inner(grad(p), grad(q))*dx + p*q*dx
-L = p*xi*dx
-dW = Function(model.V) # For soln vector
-dW_prob = LinearVariationalProblem(a, L, dW)
-dw_solver = LinearVariationalSolver(dW_prob,
+L_1 = p*xi*dx
+dW_1 = Function(model.V) # For soln vector
+dW_prob_1 = LinearVariationalProblem(a, L_1, dW_1)
+dw_solver_1 = LinearVariationalSolver(dW_prob_1,
+                                         solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
+
+L_2 = p*dW_1*dx
+dW_2 = Function(model.V) # For soln vector
+dW_prob_2 = LinearVariationalProblem(a, L_2, dW_2)
+dw_solver_2 = LinearVariationalSolver(dW_prob_2,
                                          solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
 for i in range(nensemble[jtfilter.ensemble_rank]):
-    xi.assign(model.rg.normal(model.V, 0., 0.1))
-    dw_solver.solve()
+    xi.assign(model.rg.normal(model.V, 0., 0.25))
+    dw_solver_1.solve()
+    dw_solver_2.solve()
     #print(dW.dat.data[:].max())
     _, u = jtfilter.ensemble[i][0].split()
-    u.assign(dW)
+    u.assign(dW_2)
 
 
 
