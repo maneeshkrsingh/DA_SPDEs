@@ -22,25 +22,24 @@ X_truth = model.allocate()
 q0 = X_truth[0]
 x = SpatialCoordinate(model.mesh)
 q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
-                        +0.02*sin(2*pi*x[0])+0.02*sin(2*pi*x[1])+0.3*cos(10*pi*x[0])*cos(4*pi*x[1])) # sin 8px 
+                        +0.02*sin(2*pi*x[0])+0.02*sin(2*pi*x[1])+0.3*cos(10*pi*x[0])*cos(4*pi*x[1])) 
+
+# q0.interpolate(0.1 * sin(x[0]) * sin(x[1]))
 
 
 
 N_obs = 10
 
-model.randomize(X_truth) # poppulating noise term with PV 
-model.run(X_truth, X_truth) # use noise term to solve for PV
-u_true_VOM = model.obs() # use PV to get streamfunction and velocity comp1 
+# #To store velocity values 
+v_true = model.obs().dat.data[:]
 
-u_true = u_true_VOM.dat.data[:]
+v1_true = v_true[:,0]
+v2_true = v_true[:,1]
 
-u1_true = u_true[:,0]
-u2_true = u_true[:,1]
-
-u1_true_all = np.zeros((N_obs, np.size(u1_true)))
-u2_true_all = np.zeros((N_obs, np.size(u2_true)))
-u1_obs_all = np.zeros((N_obs, np.size(u1_true)))
-u2_obs_all = np.zeros((N_obs, np.size(u2_true)))
+u1_true_all = np.zeros((N_obs, np.size(v1_true)))
+u2_true_all = np.zeros((N_obs, np.size(v2_true)))
+u1_obs_all = np.zeros((N_obs, np.size(v1_true)))
+u2_obs_all = np.zeros((N_obs, np.size(v2_true)))
 
 
 # Exact numerical approximation 
@@ -54,8 +53,8 @@ for i in range(N_obs):
     u1_true_all[i,:] = u[:,0]
     u2_true_all[i,:] = u[:,1]
 
-    u_1_noise = np.random.normal(0.0, 0.05, (n+1)**2 ) # mean = 0, sd = 0.05
-    u_2_noise = np.random.normal(0.0, 0.05, (n+1)**2 ) 
+    u_1_noise = np.random.normal(0.0, 0.025, (n+1)**2 ) # mean = 0, sd = 0.05
+    u_2_noise = np.random.normal(0.0, 0.025, (n+1)**2 ) 
 
     u1_obs = u[:,0] + u_1_noise
     u2_obs = u[:,1] + u_2_noise

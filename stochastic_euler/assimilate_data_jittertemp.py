@@ -20,14 +20,15 @@ n = 4
 nsteps = 5
 model = Euler_SD(n, nsteps=nsteps)
 
-MALA = False
-verbose = False
+MALA = True
+verbose = True
+nudging = False
+jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
+                              verbose=verbose, MALA=MALA,
+                              nudging=nudging, visualise_tape=False)
 
 
-# jtfilter = bootstrap_filter()
-
-jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
-                            verbose=verbose, MALA=MALA)
+# jtfilter = bootstrap_filter(verbose=verbose)
 
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 2, rho= 0.99,
 #                             verbose=verbose, MALA=MALA)
@@ -35,7 +36,7 @@ jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
 u_exact = np.load('u_true_data.npy')
 u_vel = np.load('u_obs_data.npy') 
 
-nensemble = [2]*20
+nensemble = [2]*5
 
 
 jtfilter.setup(nensemble, model)
@@ -49,13 +50,13 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
     q0_in = a*sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*b*cos(6*pi*x[0])*cos(6*pi*x[1])\
                 +0.02*a*sin(2*pi*x[0])+0.02*a*sin(2*pi*x[1])+0.3*b*cos(10*pi*x[0])*cos(4*pi*x[1]) 
 
-   
+    # q0_in = 0.1 *a*b* sin(x[0]) * sin(x[1])
     q = jtfilter.ensemble[i][0]
     q.interpolate(q0_in)
    
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.05**2/2*dx
+    ll = (y-Y)**2/0.025**2/2*dx
     return ll
 
     
