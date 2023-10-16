@@ -22,7 +22,7 @@ model = Camsholm(100, nsteps, xpoints, lambdas=True)
 
 MALA = False
 verbose = False
-nudging = False
+nudging = True
 jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
@@ -36,7 +36,7 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
 #                              verbose=verbose, MALA=MALA)
 
-nensemble = [4]*10
+nensemble = [5]*20
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -187,17 +187,20 @@ if COMM_WORLD.rank == 0:
     #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
-    np.save("../../DA_Results/withoutempMCMC_ESS.npy",np.array((ESS_arr)))
-    #np.save("temp.npy",np.array((temp_run_count)))
-    np.save("../../DA_Results/withoutempassimilated_ensemble.npy", y_e)
-    np.save("../../DA_Results/withoutempsimualated_all_time_obs.npy", y_sim_obs_allobs_step)
-    np.save("../../DA_Results/withoutempnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+    
+    
+    if not nudging:
+        np.save("../../DA_Results/withtempMCMC_ESS.npy",np.array((ESS_arr)))
+        #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/mcmc_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
-        np.save("../../DA_Results/SimplifiedNudge_ESS.npy",np.array((ESS_arr)))
-        np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/Simplifiednudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/Simplifiednudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        np.save("../../DA_Results/Simplifiednudge_new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        np.save("../../DA_Results/nudge_ESS.npy",np.array((ESS_arr)))
+        #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/nudge_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/nudge_new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
 # Ys_obs = np.load("simualated_all_time_obs.npy")
 # Ys_obs_new = np.load("new_simualated_all_time_obs.npy")

@@ -10,18 +10,14 @@ from pyadjoint import AdjFloat
 from nudging.models.stochastic_Camassa_Holm import Camsholm
 
 import os
-
 os.makedirs('../../DA_Results/', exist_ok=True)
-
-
 
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
 """
-
 nsteps = 5
 xpoints = 40
-model = Camsholm(100, nsteps, xpoints, lambdas=False)
+model = Camsholm(100, nsteps, xpoints, lambdas=True)
 
 MALA = False
 verbose = False
@@ -30,16 +26,12 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
-
 # jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
 #                              verbose=verbose, MALA=MALA)
 
 # jtfilter = bootstrap_filter()
 
-# jtfilter = nudging_filter(n_temp=4, n_jitt = 4, rho= 0.999,
-#                              verbose=verbose, MALA=MALA)
-
-nensemble = [5]*10
+nensemble = [5]*20
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -64,24 +56,10 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
     xi.assign(model.rg.normal(model.V, 0., 0.25))
     dw_solver_1.solve()
     dw_solver_2.solve()
-    #print(dW.dat.data[:].max())
+    # print(dW_2.dat.data[:].shape)
     _, u = jtfilter.ensemble[i][0].split()
     u.assign(dW_2)
 
-
-
-# ##prepare the initial ensemble
-# for i in range(nensemble[jtfilter.ensemble_rank]):
-#     dx0 = model.rg.normal(model.R, 0., 1.05)
-#     dx1 = model.rg.normal(model.R, 0., 1.05)
-#     a = model.rg.uniform(model.R, 0., 1.0)
-#     b = model.rg.uniform(model.R, 0., 1.0)
-#     u0_exp = (1+a)*0.2*2/(exp(x-403./15. - dx0) + exp(-x+403./15. + dx0)) \
-#                     + (1+b)*0.5*2/(exp(x-203./15. - dx1)+exp(-x+203./15. + dx1))
-    
-
-#     _, u = jtfilter.ensemble[i][0].split()
-#     u.interpolate(u0_exp)
 
 
 def log_likelihood(y, Y):
@@ -210,17 +188,20 @@ if COMM_WORLD.rank == 0:
     #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
-    np.save("../../DA_Results/withoutempMCMC_ESS.npy",np.array((ESS_arr)))
-    #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
-    np.save("../../DA_Results/bs_assimilated_ensemble.npy", y_e)
-    np.save("../../DA_Results/bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-    np.save("../../DA_Results/bsnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+    
+    
+    if not nudging:
+        np.save("../../DA_Results/withtempMCMC_ESS.npy",np.array((ESS_arr)))
+        #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/mcmc_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
-        np.save("../../DA_Results/SimplifiedNudge_ESS.npy",np.array((ESS_arr)))
-        np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/Simplifiednudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/Simplifiednudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        np.save("../../DA_Results/Simplifiednudge_new_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        np.save("../../DA_Results/nudge_ESS.npy",np.array((ESS_arr)))
+        #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/nudge_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
 # Ys_obs = np.load("simualated_all_time_obs.npy")
 # Ys_obs_new = np.load("new_simualated_all_time_obs.npy")

@@ -17,36 +17,20 @@ add observation noise N(0, sigma^2)
 """
 nsteps = 5
 xpoints = 40
+N_obs = 100
 model = Camsholm(100, nsteps, xpoints)
 model.setup()
+x, = SpatialCoordinate(model.mesh)
+
 X_truth = model.allocate()
 _, u0 = X_truth[0].split()
-
-Y_truth = model.allocate()
-_, u0 = Y_truth[0].split()
-
-
-x, = SpatialCoordinate(model.mesh)
 u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
 
-N_obs = 100
 
 y_true = model.obs().dat.data[:]
 #y_fulltrue = model.obs().dat.data[:]
 y_obs_full = np.zeros((N_obs, np.size(y_true)))
 y_true_full = np.zeros((N_obs, np.size(y_true)))
-
-#y_alltime = model.obs().dat.data[:]
-y_true_all = np.zeros((nsteps, np.size(y_true)))
-y_obs_all = np.zeros((nsteps, np.size(y_true)))
-y_true_alltime = np.zeros((N_obs*nsteps, np.size(y_true)))
-y_obs_alltime = np.zeros((N_obs*nsteps, np.size(y_true)))
-
-
-
-
-print(y_obs_alltime.shape)
-
 
 
 for i in range(N_obs):
@@ -64,7 +48,18 @@ np.save("../../DA_Results/y_true.npy", y_true_full)
 np.save("../../DA_Results/y_obs.npy", y_obs_full)
 
 
+Y_truth = model.allocate()
+_, u0 = Y_truth[0].split()
+u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
 
+
+#y_alltime = model.obs().dat.data[:]
+y_true_all = np.zeros((nsteps, np.size(y_true)))
+y_obs_all = np.zeros((nsteps, np.size(y_true)))
+y_true_alltime = np.zeros((N_obs*nsteps, np.size(y_true)))
+y_obs_alltime = np.zeros((N_obs*nsteps, np.size(y_true)))
+
+print(y_obs_alltime.shape)
 
 for i in range(N_obs):
     for step in range(nsteps):
