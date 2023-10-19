@@ -16,22 +16,22 @@ os.makedirs('../../DA_Results/', exist_ok=True)
     Do assimilation step for tempering and jittering steps 
 """
 nsteps = 5
-xpoints = 40
-model = Camsholm(100, nsteps, xpoints, lambdas=True)
+xpoints = 100
+model = Camsholm(100, nsteps, xpoints, seed = 12345, lambdas=True)
 
 MALA = False
-verbose = False
+verbose = True
 nudging = False
-jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
+jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.025,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
 # jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
 #                              verbose=verbose, MALA=MALA)
 
-# jtfilter = bootstrap_filter()
+# jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [5]*20
+nensemble = [5]*30
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -52,14 +52,41 @@ dW_2 = Function(model.V) # For soln vector
 dW_prob_2 = LinearVariationalProblem(a, L_2, dW_2)
 dw_solver_2 = LinearVariationalSolver(dW_prob_2,
                                          solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
+
+L_3 = p*dW_2*dx
+dW_3 = Function(model.V) # For soln vector
+dW_prob_3 = LinearVariationalProblem(a, L_3, dW_3)
+dw_solver_3 = LinearVariationalSolver(dW_prob_3,
+                                         solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
+
+all_particle = np.zeros((xpoints, 5))
+
+
+
+
 for i in range(nensemble[jtfilter.ensemble_rank]):
-    xi.assign(model.rg.normal(model.V, 0., 0.25))
+    dx0 = model.rg.normal(model.R, 0.0, 0.5)
+    dx1 = model.rg.normal(model.R, 0.75, 1.25)
+    a = model.rg.normal(model.R, 0.0, 0.5)
+    b = model.rg.normal(model.R, 0.75, 1.25)
+    xi.assign(model.rg.normal(model.V, 0., 1.0))
     dw_solver_1.solve()
     dw_solver_2.solve()
+    dw_solver_3.solve()
     # print(dW_2.dat.data[:].shape)
     _, u = jtfilter.ensemble[i][0].split()
-    u.assign(dW_2)
+    #print(a.dat.data , dx0.dat.data)
+    u.assign(a*b*dW_3+dx0*dx1)
+    #all_particle[:,i] = u.dat.data[:]
 
+
+
+
+# plt.plot( all_particle)
+# #plt.plot(dU.dat.data[:], 'b-', label='true soln')
+# plt.legend()
+# # plt.plot(dw_std, 'r-')
+# plt.show()
 
 
 def log_likelihood(y, Y):
@@ -107,29 +134,27 @@ for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
     yVOM.dat.data[:] = y[k, :]
 
-    #z = []
+   
     # make a copy so that we don't overwrite the initial condition
     # in the next step
     for i in  range(nensemble[jtfilter.ensemble_rank]):
-        z = []
         for p in range(len(jtfilter.new_ensemble[i])):
             jtfilter.new_ensemble[i][p].assign(jtfilter.ensemble[i][p])
-            jtfilter.proposal_ensemble[i][p].assign(jtfilter.ensemble[i][p])
         model.randomize(jtfilter.new_ensemble[i])
-        model.randomize(jtfilter.proposal_ensemble[i])
-        z = model.forcast_data_allstep(jtfilter.proposal_ensemble[i])
-        #PETSc.Sys.Print(np.array(z).shape)
-        for step in range(nsteps):
-            for m in range(y.shape[1]):
-                y_sim_obs_list_new[m].dlocal[i] = z[step][m]
+        # model.randomize(jtfilter.proposal_ensemble[i])
+        # z = model.forcast_data_allstep(jtfilter.proposal_ensemble[i])
+        # #PETSc.Sys.Print(np.array(z).shape)
+        # for step in range(nsteps):
+        #     for m in range(y.shape[1]):
+        #         y_sim_obs_list_new[m].dlocal[i] = z[step][m]
 
                 
-    for step in range(nsteps):
-        for m in range(y.shape[1]):
-            y_sim_obs_list_new[m].synchronise()
-            if COMM_WORLD.rank == 0:
-                y_sim_obs_alltime_step_new[:, step, m] = y_sim_obs_list_new[m].data()
-                y_sim_obs_allobs_step_new[:,nsteps*k+step,m] = y_sim_obs_alltime_step_new[:, step, m]
+    # for step in range(nsteps):
+    #     for m in range(y.shape[1]):
+    #         y_sim_obs_list_new[m].synchronise()
+    #         if COMM_WORLD.rank == 0:
+    #             y_sim_obs_alltime_step_new[:, step, m] = y_sim_obs_list_new[m].data()
+    #             y_sim_obs_allobs_step_new[:,nsteps*k+step,m] = y_sim_obs_alltime_step_new[:, step, m]
 
 
     # Compute simulated observations using "prior" distribution
@@ -195,13 +220,13 @@ if COMM_WORLD.rank == 0:
         #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/mcmc_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
         np.save("../../DA_Results/nudge_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/nudge_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
 # Ys_obs = np.load("simualated_all_time_obs.npy")
 # Ys_obs_new = np.load("new_simualated_all_time_obs.npy")
