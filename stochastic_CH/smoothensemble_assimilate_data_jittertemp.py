@@ -16,22 +16,20 @@ os.makedirs('../../DA_Results/', exist_ok=True)
     Do assimilation step for tempering and jittering steps 
 """
 nsteps = 5
-xpoints = 100
-model = Camsholm(100, nsteps, xpoints, seed = 12345, lambdas=True)
+xpoints = 40 # no of weather station
+model = Camsholm(100, nsteps, xpoints, seed = 389, lambdas=True)
 
 MALA = False
 verbose = True
-nudging = False
-jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.025,
+nudging = True
+
+jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.025,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
-# jtfilter = jittertemp_filter(n_temp=4, n_jitt = 4, rho= 0.99,
-#                              verbose=verbose, MALA=MALA)
-
 # jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [5]*30
+nensemble = [4]*25
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -41,7 +39,7 @@ p = TestFunction(model.V)
 q = TrialFunction(model.V)
 xi = Function(model.V) # To insert noise 
 a = inner(grad(p), grad(q))*dx + p*q*dx
-L_1 = p*xi*dx
+L_1 = p*abs(xi)*dx
 dW_1 = Function(model.V) # For soln vector
 dW_prob_1 = LinearVariationalProblem(a, L_1, dW_1)
 dw_solver_1 = LinearVariationalSolver(dW_prob_1,
@@ -59,30 +57,47 @@ dW_prob_3 = LinearVariationalProblem(a, L_3, dW_3)
 dw_solver_3 = LinearVariationalSolver(dW_prob_3,
                                          solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
 
-all_particle = np.zeros((xpoints, 5))
+# all_particle = np.zeros((xpoints, 4))
+
+dx0 = model.rg.normal(model.R, 0.0, 1.0)
+dx1 = model.rg.normal(model.R, 0.0, 0.05)
+a = model.rg.normal(model.R, 0.0, 1.0)
+b = model.rg.normal(model.R, 0.0, 0.05)
+xi.assign(model.rg.normal(model.V, 0., 1.0))
+dw_solver_1.solve()
+dw_solver_2.solve()
+dw_solver_3.solve()
+
 
 
 
 
 for i in range(nensemble[jtfilter.ensemble_rank]):
-    dx0 = model.rg.normal(model.R, 0.0, 0.5)
-    dx1 = model.rg.normal(model.R, 0.75, 1.25)
-    a = model.rg.normal(model.R, 0.0, 0.5)
-    b = model.rg.normal(model.R, 0.75, 1.25)
-    xi.assign(model.rg.normal(model.V, 0., 1.0))
-    dw_solver_1.solve()
-    dw_solver_2.solve()
-    dw_solver_3.solve()
+    # dx1 = model.rg.normal(model.R, 0.0, 0.05)
+    # b = model.rg.normal(model.R, 0.0, 0.05)
+   
+    # dx0 = model.rg.normal(model.R, 0.0, 1.0)
+
+    # a = model.rg.normal(model.R, 0.0, 1.0)
+
+    # xi.assign(model.rg.normal(model.V, 0., 1.0))
+    # dw_solver_1.solve()
+    # dw_solver_2.solve()
+    # dw_solver_3.solve()
+
+
+
+
     # print(dW_2.dat.data[:].shape)
     _, u = jtfilter.ensemble[i][0].split()
     #print(a.dat.data , dx0.dat.data)
-    u.assign(a*b*dW_3+dx0*dx1)
-    #all_particle[:,i] = u.dat.data[:]
+    u.assign(dW_3)
+    # all_particle[:,i] = u.dat.data[:]
 
 
 
 
-# plt.plot( all_particle)
+# plt.plot( all_particle[:,:])
 # #plt.plot(dU.dat.data[:], 'b-', label='true soln')
 # plt.legend()
 # # plt.plot(dw_std, 'r-')
@@ -90,11 +105,12 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
 
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.025**2/2*dx
+    ll = (y-Y)**2/0.25**2/2*dx
+    #ll = (y-Y)**2*dx
     return ll
     
 #Load data
-y_exact = np.load('../../DA_Results/y_true.npy')
+# y_exact = np.load('../../DA_Results/y_true.npy')
 y = np.load('../../DA_Results/y_obs.npy') 
 N_obs = y.shape[0]
 
@@ -216,13 +232,13 @@ if COMM_WORLD.rank == 0:
     
     
     if not nudging:
-        np.save("../../DA_Results/withtempMCMC_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/bs_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/mcmc_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/bs_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
-        np.save("../../DA_Results/nudge_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/withouttemp_nudge_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/nudge_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)

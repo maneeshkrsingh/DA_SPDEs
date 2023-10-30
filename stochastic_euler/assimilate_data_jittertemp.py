@@ -16,14 +16,14 @@ from nudging.models.stochastic_euler import Euler_SD
     Do assimilation step for tempering and jittering steps 
 """
 
-n = 4
+n = 8
 nsteps = 5
-model = Euler_SD(n, nsteps=nsteps)
+model = Euler_SD(n, nsteps=nsteps, lambdas=True)
 
-MALA = True
+MALA = False
 verbose = True
-nudging = False
-jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
+nudging = True
+jtfilter = jittertemp_filter(n_jitt = 2, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
@@ -36,7 +36,7 @@ jtfilter = jittertemp_filter(n_jitt = 4, delta = 0.1,
 u_exact = np.load('u_true_data.npy')
 u_vel = np.load('u_obs_data.npy') 
 
-nensemble = [2]*5
+nensemble = [2]*25
 
 
 jtfilter.setup(nensemble, model)
@@ -45,8 +45,8 @@ x = SpatialCoordinate(model.mesh)
 
 #prepare the initial ensemble
 for i in range(nensemble[jtfilter.ensemble_rank]):
-    a = model.rg.uniform(model.R, 0., 1.0) 
-    b = model.rg.uniform(model.R, 0., 1.0)
+    a = model.rg.normal(model.R, 0., 0.5) 
+    b = model.rg.mormal(model.R, 0., 0.5)
     q0_in = a*sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*b*cos(6*pi*x[0])*cos(6*pi*x[1])\
                 +0.02*a*sin(2*pi*x[0])+0.02*a*sin(2*pi*x[1])+0.3*b*cos(10*pi*x[0])*cos(4*pi*x[1]) 
 
@@ -59,14 +59,10 @@ def log_likelihood(y, Y):
     ll = (y-Y)**2/0.025**2/2*dx
     return ll
 
-    
-
 
 N_obs = u_vel.shape[0]
-
 # VVOM Function
 u_VOM = Function(model.VVOM) 
-
 
 # prepare shared arrays for data
 u1_e_list = []
