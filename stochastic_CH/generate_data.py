@@ -7,24 +7,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nudging.models.stochastic_Camassa_Holm import Camsholm
 
+import os
+os.makedirs('../../DA_Results/', exist_ok=True)
+
+
 """
 create some synthetic data/observation data at T_1 ---- T_Nobs
 Pick initial conditon
 run model, get obseravation
 add observation noise N(0, sigma^2)
 """
-N_obs = 2
+N_obs = 100
 nsteps = 5
-xpoints = 5
-model = Camsholm(100, nsteps, xpoints, lambdas=False)
+xpoints = 40
+model = Camsholm(100, nsteps, xpoints, seed=12345,  lambdas=False)
 model.setup()
 obs_shape = model.obs().dat.data[:]
 x, = SpatialCoordinate(model.mesh)
 
 ###################  To generate data only for obs data points 
-# X_truth = model.allocate()
-# _, u0 = X_truth[0].split()
-# u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
+X_truth = model.allocate()
+_, u0 = X_truth[0].split()
+u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
 
 
 
@@ -32,40 +36,40 @@ x, = SpatialCoordinate(model.mesh)
 y_true = np.zeros((N_obs, np.size(obs_shape)))
 y_obs = np.zeros((N_obs, np.size(obs_shape)))
 
-# for i in range(N_obs):
-#     model.randomize(X_truth)
-#     model.run(X_truth, X_truth) # run method for every time step
-#     y = model.obs().dat.data[:]
-#     y_true[i,:] = y
-#     y_noise = np.random.normal(0.0, 0.025, xpoints)  
-#     y_obs[i,:] =  y + y_noise  
-# # print('y', y_true)
-
-
-
-###################  To generate data for all time  data points 
-Y_truth = model.allocate()
-_, u0 = Y_truth[0].split()
-u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
-
-# save data at all points
-y_true_alltime = np.zeros((N_obs*nsteps, np.size(obs_shape)))
-y_obs_alltime = np.zeros((N_obs*nsteps, np.size(obs_shape)))
-
 for i in range(N_obs):
-    z = []
-    model.randomize(Y_truth)
-    z=model.forcast_data_allstep(Y_truth)
-    y_noise = np.random.normal(0.0, 0.025, xpoints)
-    for j in range(len(z)):
-        y_true_alltime[nsteps*i+j,:] = z[j]
-        y_obs_alltime[nsteps*i+j,:] = z[j] + y_noise
-        if j == len(z)-1:
-           y_true[i,:] =  y_true_alltime[nsteps*i+j,:]
-           y_obs[i,:] =  y_true[i,:] + y_noise
+    model.randomize(X_truth)
+    model.run(X_truth, X_truth) # run method for every time step
+    y = model.obs().dat.data[:]
+    y_true[i,:] = y
+    y_noise = np.random.normal(0.0, 0.1, xpoints)  
+    y_obs[i,:] =  y + y_noise  
+# print('y', y_true)
+print(y_true.shape)
+np.save("../../DA_Results/y_true.npy", y_true)
+np.save("../../DA_Results/y_obs.npy", y_obs)
+
+# ###################  To generate data for all time  data points 
+# Y_truth = model.allocate()
+# _, u0 = Y_truth[0].split()
+# u0.interpolate(0.2*2/(exp(x-403./15.) + exp(-x+403./15.)) + 0.5*2/(exp(x-203./15.)+exp(-x+203./15.)))
+
+# # save data at all points
+# y_true_alltime = np.zeros((N_obs*nsteps, np.size(obs_shape)))
+# y_obs_alltime = np.zeros((N_obs*nsteps, np.size(obs_shape)))
+
+# for i in range(N_obs):
+#     z = []
+#     model.randomize(Y_truth)
+#     z=model.forcast_data_allstep(Y_truth)
+#     y_noise = np.random.normal(0.0, 0.025, xpoints)
+#     for j in range(len(z)):
+#         y_true_alltime[nsteps*i+j,:] = z[j]
+#         y_obs_alltime[nsteps*i+j,:] = z[j] + y_noise
+#         if j == len(z)-1:
+#            y_true[i,:] =  y_true_alltime[nsteps*i+j,:]
+#            y_obs[i,:] =  y_true[i,:] + y_noise
 
 
-np.save("y_true.npy", y_true)
-np.save("y_obs.npy", y_obs)
-np.save("y_true_alltime.npy", y_true_alltime)
-np.save("y_obs_alltime.npy", y_obs_alltime)
+
+# np.save("y_true_alltime.npy", y_true_alltime)
+# np.save("y_obs_alltime.npy", y_obs_alltime)
