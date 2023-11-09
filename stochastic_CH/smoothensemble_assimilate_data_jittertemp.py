@@ -12,34 +12,50 @@ from nudging.models.stochastic_Camassa_Holm import Camsholm
 import os
 os.makedirs('../../DA_Results/', exist_ok=True)
 
+## Load data
+
+# y_exact = np.load('../../DA_Results/y_true.npy')
+y = np.load('../../DA_Results/y_obs.npy') 
+N_obs = y.shape[0]
+ys = y.shape
+
+
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
 """
 nsteps = 5
-xpoints = 40 # no of weather station
-model = Camsholm(100, nsteps, xpoints, seed = 389, lambdas=True)
+xpoints =41 # no of weather station
+x_disc = 100 # no of discrete points 
+model = Camsholm(100, nsteps, xpoints, seed = 1234567890, lambdas=True)
 
 MALA = False
-verbose = True
+verbose = False
 nudging = True
 
-jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.025,
+jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.01,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
 # jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [4]*25
+nensemble = [5]*30
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
 
-# # double elliptic problem to have smoother initial conditions in space
+# #  elliptic problem to have smoother initial conditions in space
+One = Function(model.V).assign(1.0)
+Area = assemble(One*dx)
+cell_area = assemble(CellVolume(model.mesh)*dx)/Area
+alpha_w = 1/cell_area**0.5
+kappa_inv_sq = 2*cell_area**2
+
+
 p = TestFunction(model.V)
 q = TrialFunction(model.V)
 xi = Function(model.V) # To insert noise 
-a = inner(grad(p), grad(q))*dx + p*q*dx
-L_1 = p*abs(xi)*dx
+a = kappa_inv_sq*inner(grad(p), grad(q))*dx + p*q*dx
+L_1 = alpha_w*p*abs(xi)*dx
 dW_1 = Function(model.V) # For soln vector
 dW_prob_1 = LinearVariationalProblem(a, L_1, dW_1)
 dw_solver_1 = LinearVariationalSolver(dW_prob_1,
@@ -57,62 +73,54 @@ dW_prob_3 = LinearVariationalProblem(a, L_3, dW_3)
 dw_solver_3 = LinearVariationalSolver(dW_prob_3,
                                          solver_parameters={'mat_type': 'aij', 'ksp_type': 'preonly','pc_type': 'lu'})
 
-# all_particle = np.zeros((xpoints, 4))
 
-dx0 = model.rg.normal(model.R, 0.0, 1.0)
-dx1 = model.rg.normal(model.R, 0.0, 0.05)
-a = model.rg.normal(model.R, 0.0, 1.0)
-b = model.rg.normal(model.R, 0.0, 0.05)
-xi.assign(model.rg.normal(model.V, 0., 1.0))
-dw_solver_1.solve()
-dw_solver_2.solve()
-dw_solver_3.solve()
+# #prepare to save initaililzation 
 
+y_init_list = []
+for m in range(x_disc):        # 100 total no of grids 
+    y_init_shared = SharedArray(partition=nensemble, 
+                                  comm=jtfilter.subcommunicators.ensemble_comm)
+    y_init_list.append(y_init_shared)                            
 
-
+if COMM_WORLD.rank == 0:
+    y_init = np.zeros((np.sum(nensemble),  x_disc))              
 
 
 for i in range(nensemble[jtfilter.ensemble_rank]):
-    # dx1 = model.rg.normal(model.R, 0.0, 0.05)
-    # b = model.rg.normal(model.R, 0.0, 0.05)
+    dx1 = model.rg.normal(model.R, 0.0, 0.05)
+    b = model.rg.normal(model.R, 0.0, 0.05)
    
-    # dx0 = model.rg.normal(model.R, 0.0, 1.0)
+    dx0 = model.rg.normal(model.R, 0.0, 1.0)
 
-    # a = model.rg.normal(model.R, 0.0, 1.0)
+    a = model.rg.normal(model.R, 0.0, 1.0)
 
-    # xi.assign(model.rg.normal(model.V, 0., 1.0))
-    # dw_solver_1.solve()
-    # dw_solver_2.solve()
-    # dw_solver_3.solve()
-
-
+    xi.assign(model.rg.normal(model.V, 0., 1.0))
+    dw_solver_1.solve()
+    dw_solver_2.solve()
+    dw_solver_3.solve()
 
 
-    # print(dW_2.dat.data[:].shape)
     _, u = jtfilter.ensemble[i][0].split()
-    #print(a.dat.data , dx0.dat.data)
-    u.assign(dW_3)
-    # all_particle[:,i] = u.dat.data[:]
+    
+    u.assign((a+1)*dW_3+dx0+1)
+    obsdata = u.dat.data[:]
+    for m in range(x_disc):
+        y_init_list[m].dlocal[i] = obsdata[m]
+
+for m in range(x_disc):
+        y_init_list[m].synchronise()
+        if COMM_WORLD.rank == 0:
+            y_init[:,m] = y_init_list[m].data()
 
 
 
-
-# plt.plot( all_particle[:,:])
-# #plt.plot(dU.dat.data[:], 'b-', label='true soln')
-# plt.legend()
-# # plt.plot(dw_std, 'r-')
-# plt.show()
 
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.25**2/2*dx
-    #ll = (y-Y)**2*dx
+    ll = (y-Y)**2/0.5**2/2*dx
     return ll
     
-#Load data
-# y_exact = np.load('../../DA_Results/y_true.npy')
-y = np.load('../../DA_Results/y_obs.npy') 
-N_obs = y.shape[0]
+
 
 yVOM = Function(model.VVOM)
 
@@ -129,7 +137,7 @@ for m in range(y.shape[1]):
     y_sim_obs_list.append(y_sim_obs_shared)
     y_sim_obs_list_new.append(y_sim_obs_shared)
 
-ys = y.shape
+
 if COMM_WORLD.rank == 0:
     y_e = np.zeros((np.sum(nensemble), ys[0], ys[1]))
     y_sim_obs_alltime_step = np.zeros((np.sum(nensemble),nsteps,  ys[1]))
@@ -224,6 +232,7 @@ for k in range(N_obs):
 
 
 if COMM_WORLD.rank == 0:
+    np.save("../../DA_Results/init_ensemble.npy", y_init)
     #print(ESS_arr)
     print("Time shape", y_sim_obs_alltime_step.shape)
     #print("Time", y_sim_obs_alltime_step)
@@ -232,16 +241,16 @@ if COMM_WORLD.rank == 0:
     
     
     if not nudging:
-        np.save("../../DA_Results/bs_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/smooth_mcmc_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/bs_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/smooth_mcmc_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/smooth_mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
-        np.save("../../DA_Results/withouttemp_nudge_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/smooth_nudge_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/nudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/smooth_nudge_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
 
 # Ys_obs = np.load("simualated_all_time_obs.npy")
