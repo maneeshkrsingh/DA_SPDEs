@@ -24,13 +24,13 @@ ys = y.shape
     Do assimilation step for tempering and jittering steps 
 """
 nsteps = 5
-xpoints =41 # no of weather station
+xpoints =81 # no of weather station
 x_disc = 100 # no of discrete points 
-model = Camsholm(100, nsteps, xpoints, seed = 1234567890, lambdas=True)
+model = Camsholm(100, nsteps, xpoints, seed = 123456789, lambdas=True)
 
 MALA = False
-verbose = False
-nudging = True
+verbose = True
+nudging = False
 
 jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.01,
                               verbose=verbose, MALA=MALA,
@@ -38,7 +38,7 @@ jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.01,
 
 # jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [5]*30
+nensemble = [4]*25
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -47,15 +47,16 @@ x, = SpatialCoordinate(model.mesh)
 One = Function(model.V).assign(1.0)
 Area = assemble(One*dx)
 cell_area = assemble(CellVolume(model.mesh)*dx)/Area
-alpha_w = 1/cell_area**0.5
+#alpha_w = 1/cell_area**0.5
 kappa_inv_sq = 2*cell_area**2
+#kappa_inv_sq = 1
 
 
 p = TestFunction(model.V)
 q = TrialFunction(model.V)
 xi = Function(model.V) # To insert noise 
 a = kappa_inv_sq*inner(grad(p), grad(q))*dx + p*q*dx
-L_1 = alpha_w*p*abs(xi)*dx
+L_1 = (1/CellVolume(model.mesh)**0.5)*p*abs(xi)*dx
 dW_1 = Function(model.V) # For soln vector
 dW_prob_1 = LinearVariationalProblem(a, L_1, dW_1)
 dw_solver_1 = LinearVariationalSolver(dW_prob_1,
@@ -102,7 +103,7 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
 
     _, u = jtfilter.ensemble[i][0].split()
     
-    u.assign((a+1)*dW_3+dx0+1)
+    u.assign(abs(a)*dW_3+dx0+1)
     obsdata = u.dat.data[:]
     for m in range(x_disc):
         y_init_list[m].dlocal[i] = obsdata[m]
@@ -113,7 +114,8 @@ for m in range(x_disc):
             y_init[:,m] = y_init_list[m].data()
 
 
-
+if COMM_WORLD.rank == 0:
+    np.save("../../DA_Results/init_ensemble.npy", y_init)
 
 
 def log_likelihood(y, Y):
@@ -212,6 +214,7 @@ for k in range(N_obs):
         #temp_run_count.append(jtfilter.temp_count)
         
         
+        
     for i in range(nensemble[jtfilter.ensemble_rank]):
         model.w0.assign(jtfilter.ensemble[i][0])
         obsdata = model.obs().dat.data[:]
@@ -232,7 +235,8 @@ for k in range(N_obs):
 
 
 if COMM_WORLD.rank == 0:
-    np.save("../../DA_Results/init_ensemble.npy", y_init)
+    #print('Tempering count', temp_run_count)
+    #np.save("../../DA_Results/init_ensemble.npy", y_init)
     #print(ESS_arr)
     print("Time shape", y_sim_obs_alltime_step.shape)
     #print("Time", y_sim_obs_alltime_step)
@@ -248,7 +252,7 @@ if COMM_WORLD.rank == 0:
         # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
         np.save("../../DA_Results/smooth_nudge_ESS.npy",np.array((ESS_arr)))
-        #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/nudge_temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/smooth_nudge_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
