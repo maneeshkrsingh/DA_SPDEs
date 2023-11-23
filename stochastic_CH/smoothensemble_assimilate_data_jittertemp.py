@@ -32,7 +32,7 @@ MALA = False
 verbose = True
 nudging = False
 
-jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.01,
+jtfilter = jittertemp_filter(n_jitt = 20, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
@@ -50,7 +50,6 @@ cell_area = assemble(CellVolume(model.mesh)*dx)/Area
 #alpha_w = 1/cell_area**0.5
 kappa_inv_sq = 2*cell_area**2
 #kappa_inv_sq = 1
-
 
 p = TestFunction(model.V)
 q = TrialFunction(model.V)
@@ -76,7 +75,6 @@ dw_solver_3 = LinearVariationalSolver(dW_prob_3,
 
 
 # #prepare to save initaililzation 
-
 y_init_list = []
 for m in range(x_disc):        # 100 total no of grids 
     y_init_shared = SharedArray(partition=nensemble, 
@@ -150,9 +148,6 @@ if COMM_WORLD.rank == 0:
     #print(np.shape(y_sim_obs_allobs_step))
 
 
-
-
-
 ESS_arr = []
 temp_run_count =[]
 # do assimiliation step
@@ -167,21 +162,7 @@ for k in range(N_obs):
         for p in range(len(jtfilter.new_ensemble[i])):
             jtfilter.new_ensemble[i][p].assign(jtfilter.ensemble[i][p])
         model.randomize(jtfilter.new_ensemble[i])
-        # model.randomize(jtfilter.proposal_ensemble[i])
-        # z = model.forcast_data_allstep(jtfilter.proposal_ensemble[i])
-        # #PETSc.Sys.Print(np.array(z).shape)
-        # for step in range(nsteps):
-        #     for m in range(y.shape[1]):
-        #         y_sim_obs_list_new[m].dlocal[i] = z[step][m]
-
-                
-    # for step in range(nsteps):
-    #     for m in range(y.shape[1]):
-    #         y_sim_obs_list_new[m].synchronise()
-    #         if COMM_WORLD.rank == 0:
-    #             y_sim_obs_alltime_step_new[:, step, m] = y_sim_obs_list_new[m].data()
-    #             y_sim_obs_allobs_step_new[:,nsteps*k+step,m] = y_sim_obs_alltime_step_new[:, step, m]
-
+        
 
     # Compute simulated observations using "prior" distribution
     # i.e. before we have used the observed data
@@ -198,9 +179,12 @@ for k in range(N_obs):
             y_sim_obs_list[m].synchronise()
             if COMM_WORLD.rank == 0:
                 y_sim_obs_alltime_step[:, step, m] = y_sim_obs_list[m].data()
-                y_sim_obs_allobs_step[:,nsteps*k+step,m] = y_sim_obs_alltime_step[:, step, m]                
+                y_sim_obs_allobs_step[:,nsteps*k+step,m] = y_sim_obs_alltime_step[:, step, m]   
+
 
     jtfilter.assimilation_step(yVOM, log_likelihood)
+
+
     ##PETSc.Sys.Print("forward model run count", model.run_count - store_run_count)
     PETSc.garbage_cleanup(PETSc.COMM_SELF)
     petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
@@ -211,6 +195,7 @@ for k in range(N_obs):
         ESS_arr = []
         np.append(ESS_arr, jtfilter.ess)
         ESS_arr.append(jtfilter.ess)
+        #print('Step', k,  'Jittering accept_cout', jtfilter.accept_jitt_count)
         #temp_run_count.append(jtfilter.temp_count)
         
         
@@ -235,6 +220,7 @@ for k in range(N_obs):
 
 
 if COMM_WORLD.rank == 0:
+    #print('Jittering accept_reject_cout', jtfilter.accept_reject_count)
     #print('Tempering count', temp_run_count)
     #np.save("../../DA_Results/init_ensemble.npy", y_init)
     #print(ESS_arr)
@@ -256,7 +242,3 @@ if COMM_WORLD.rank == 0:
         np.save("../../DA_Results/smooth_nudge_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
-
-# Ys_obs = np.load("simualated_all_time_obs.npy")
-# Ys_obs_new = np.load("new_simualated_all_time_obs.npy")
-# print(np.min(Ys_obs_new-Ys_obs))
