@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from firedrake.petsc import PETSc
 from pyadjoint import AdjFloat
 
-from nudging.models.stochastic_Camassa_Holm import Camsholm
+from nudging.models.lineargaussian_model import LGModel
 
 import os
 os.makedirs('../../DA_Results/', exist_ok=True)
@@ -19,36 +19,38 @@ y = np.load('../../DA_Results/w_obs.npy')
 N_obs = y.shape[0]
 ys = y.shape
 
-
+np.random.seed(123456)
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
 """
-nsteps = 5
+nsteps = 1
 xpoints =41 # no of weather station
 x_disc = 100 # no of discrete points 
-model = Camsholm(100, nsteps, xpoints, seed = 123456789, lambdas=True)
+model = LGModel(100, nsteps, xpoints, seed = 12345,  scale = 1.0)
 
 MALA = False
 verbose = True
 nudging = False
 
-# jtfilter = jittertemp_filter(n_jitt = 20, delta = 0.1,
-#                               verbose=verbose, MALA=MALA,
-#                               nudging=nudging, visualise_tape=False)
+jtfilter = jittertemp_filter(n_jitt = 5, delta = 0.1,
+                              verbose=verbose, MALA=MALA,
+                              nudging=nudging, visualise_tape=False)
 
-jtfilter = bootstrap_filter(verbose=verbose)
+# jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [4]*25
+nensemble = [20]*25
 jtfilter.setup(nensemble, model)
 
+#print(Q)
 for i in range(nensemble[jtfilter.ensemble_rank]):
 
     u = jtfilter.ensemble[i][0]
-    Q = np.random.normal(0, 0.25)
+    Q = np.random.normal(0, 0.5)
+    #PETSc.Sys.Print('inital_ensemble', Q)
     u.assign(Q)
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.25**2/2*dx
+    ll = (y-Y)**2/0.5**2/2*dx
     return ll
     
 
@@ -126,7 +128,7 @@ for k in range(N_obs):
         
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
-        model.w0.assign(jtfilter.ensemble[i][0])
+        model.u = jtfilter.ensemble[i][0]
         obsdata = model.obs().dat.data[:]
         for m in range(y.shape[1]):
             y_e_list[m].dlocal[i] = obsdata[m]
@@ -139,25 +141,19 @@ for k in range(N_obs):
             y_e[:, k, m] = y_e_list[m].data()
 
 if COMM_WORLD.rank == 0:
-    #print('Jittering accept_reject_cout', jtfilter.accept_reject_count)
-    #print('Tempering count', temp_run_count)
-    #np.save("../../DA_Results/init_ensemble.npy", y_init)
-    #print(ESS_arr)
     print("Time shape", y_sim_obs_alltime_step.shape)
-    #print("Time", y_sim_obs_alltime_step)
     print("Obs shape", y_sim_obs_allobs_step.shape)
     print("Ensemble member", y_e.shape)
     
     
     if not nudging:
         np.save("../../DA_Results/smooth_mcmc_ESS.npy",np.array((ESS_arr)))
-        #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/smooth_mcmc_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/smooth_mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        
     if nudging:
         np.save("../../DA_Results/smooth_nudge_ESS.npy",np.array((ESS_arr)))
         np.save("../../DA_Results/nudge_temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/smooth_nudge_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+
