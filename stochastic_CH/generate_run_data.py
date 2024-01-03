@@ -19,7 +19,7 @@ add observation noise N(0, sigma^2)
 nsteps = 5
 xpoints = 81 # no of weather station
 
-N_obs = 20
+N_obs = 100
 model = Camsholm(100, nsteps, xpoints, seed=1234567890)
 model.setup()
 x, = SpatialCoordinate(model.mesh)
