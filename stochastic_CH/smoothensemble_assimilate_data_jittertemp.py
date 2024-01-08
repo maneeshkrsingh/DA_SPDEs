@@ -32,13 +32,13 @@ MALA = False
 verbose = True
 nudging = True
 
-jtfilter = jittertemp_filter(n_jitt = 5, delta = 0.1,
+jtfilter = jittertemp_filter(n_jitt = 5, delta = 0.15,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
 
 # jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [4]*25
+nensemble = [6]*25
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -48,8 +48,8 @@ One = Function(model.V).assign(1.0)
 Area = assemble(One*dx)
 cell_area = assemble(CellVolume(model.mesh)*dx)/Area
 #alpha_w = 1/cell_area**0.5
-kappa_inv_sq = 2*cell_area**2
-#kappa_inv_sq = 1
+#kappa_inv_sq = 2*cell_area**2
+kappa_inv_sq = 1
 
 p = TestFunction(model.V)
 q = TrialFunction(model.V)
@@ -196,7 +196,7 @@ for k in range(N_obs):
         np.append(ESS_arr, jtfilter.ess)
         ESS_arr.append(jtfilter.ess)
         #print('Step', k,  'Jittering accept_cout', jtfilter.accept_jitt_count)
-        temp_run_count.append(jtfilter.temp_count)
+        #temp_run_count.append(jtfilter.temp_count)
         
         
         
@@ -232,13 +232,13 @@ if COMM_WORLD.rank == 0:
     
     if not nudging:
         np.save("../../DA_Results/smooth_mcmcwt_ESS.npy",np.array((ESS_arr)))
-        np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
+        #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/smooth_mcmcwt_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/smooth_mcmcwt_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
         np.save("../../DA_Results/smooth_nudge_ESS.npy",np.array((ESS_arr)))
-        np.save("../../DA_Results/nudge_temp.npy",np.array((temp_run_count)))
+        #np.save("../../DA_Results/nudge_temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/smooth_nudge_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)

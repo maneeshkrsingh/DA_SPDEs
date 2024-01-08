@@ -33,8 +33,8 @@ Area = assemble(One*dx)
 cell_area = assemble(CellVolume(model.mesh)*dx)/Area
 #print('celllength', cell_area)
 #alpha_w = 1/cell_area**0.5
-kappa_inv_sq = 2*cell_area**2
-#kappa_inv_sq = 1
+#kappa_inv_sq = 2*cell_area**2
+kappa_inv_sq = 1
 #print(kappa_inv_sq)
 
 
