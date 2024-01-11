@@ -10,25 +10,36 @@ from pyadjoint import AdjFloat
 from nudging.models.stochastic_Camassa_Holm import Camsholm
 import os
 
-os.makedirs('../../DA_Results/', exist_ok=True)
+os.makedirs('../../DA_Results/non-smoothDA/', exist_ok=True)
 
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
 """
 nsteps = 5
-xpoints = 40
-model = Camsholm(100, nsteps, xpoints, seed = 12345, lambdas=True)
+xpoints = 25
+model = Camsholm(100, nsteps, xpoints, seed = 12345, noise_scale = 0.5, lambdas=True)
+model.setup()
+
+x_obs = np.linspace(0, 40, num=100, endpoint=False)
+#print(x_obs)
+x_obs_list = []
+for i in x_obs:
+    x_obs_list.append([i])
+VOM = VertexOnlyMesh(model.mesh, x_obs_list)
+VVOM = FunctionSpace(VOM, "DG", 0)
+Z = Function(VVOM)
+
 
 MALA = False
-verbose = False
-nudging = True
-jtfilter = jittertemp_filter(n_jitt = 0, delta = 0.01,
-                              verbose=verbose, MALA=MALA,
-                              nudging=nudging, visualise_tape=False)
+verbose = True
+nudging = False
+# jtfilter = jittertemp_filter(n_jitt = 5, delta = 0.15,
+#                               verbose=verbose, MALA=MALA,
+#                               nudging=nudging, visualise_tape=False)
 
-# jtfilter = bootstrap_filter(verbose=verbose)
+jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [4]*25
+nensemble = [5]*6
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -37,10 +48,10 @@ x, = SpatialCoordinate(model.mesh)
 for i in range(nensemble[jtfilter.ensemble_rank]):
     dx0 = model.rg.normal(model.R, 0., 1.0)
     dx1 = model.rg.normal(model.R, 0., 1.0)
-    a = model.rg.uniform(model.R, 0., 1.0)
-    b = model.rg.uniform(model.R, 0., 1.0)
-    u0_exp = (1+a)*0.2*2/(exp(x-403./15. - dx0) + exp(-x+403./15. + dx0)) \
-                    + (1+b)*0.5*2/(exp(x-203./15. - dx1)+exp(-x+203./15. + dx1))
+    a = model.rg.normal(model.R, 0., 1.0)
+    b = model.rg.normal(model.R, 0., 1.0)
+    u0_exp = (a)*0.2*2/(exp(x-403./15. - dx0) + exp(-x+403./15. + dx0)) \
+                    + (b)*0.5*2/(exp(x-203./15. - dx1)+exp(-x+203./15. + dx1))
     
 
     _, u = jtfilter.ensemble[i][0].split()
@@ -48,12 +59,12 @@ for i in range(nensemble[jtfilter.ensemble_rank]):
 
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.1**2/2*dx
+    ll = (y-Y)**2/0.05**2/2*dx
     return ll
     
 #Load data
-y_exact = np.load('../../DA_Results/y_true.npy')
-y = np.load('../../DA_Results/y_obs.npy') 
+y_exact = np.load('../../DA_Results/non-smoothDA/y_true.npy')
+y = np.load('../../DA_Results/non-smoothDA/y_obs.npy') 
 
 N_obs = y.shape[0]
 
@@ -61,8 +72,18 @@ yVOM = Function(model.VVOM)
 
 # prepare shared arrays for data
 y_e_list = []
+y_e_list_allx = []
 y_sim_obs_list = []
 y_sim_obs_list_new = []
+
+#print(y.shape[1])
+
+for m in range(100):
+    y_e_shared_allx = SharedArray(partition=nensemble, 
+                                  comm=jtfilter.subcommunicators.ensemble_comm)
+    y_e_list_allx.append(y_e_shared_allx)
+
+
 for m in range(y.shape[1]):        
     y_e_shared = SharedArray(partition=nensemble, 
                                   comm=jtfilter.subcommunicators.ensemble_comm)
@@ -77,10 +98,20 @@ if COMM_WORLD.rank == 0:
     y_e = np.zeros((np.sum(nensemble), ys[0], ys[1]))
     y_sim_obs_alltime_step = np.zeros((np.sum(nensemble),nsteps,  ys[1]))
     y_sim_obs_allobs_step = np.zeros((np.sum(nensemble),nsteps*N_obs,  ys[1]))
+    y_e_allx = np.zeros((np.sum(nensemble), ys[0], 100))
 
 ESS_arr = []
 # temp_run_count =[]
 # do assimiliation step
+
+outfile = []
+for i in range(nensemble[jtfilter.ensemble_rank]):
+    idx = sum(nensemble[:jtfilter.ensemble_rank]) + i
+    #print(idx, jtfilter.ensemble_rank)
+    outfile.append(File(f"../../DA_Results/non-smoothDA/paraview/{idx}_output.pvd", comm=jtfilter.subcommunicators.comm))
+
+
+
 for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
     yVOM.dat.data[:] = y[k, :]
@@ -119,7 +150,16 @@ for k in range(N_obs):
         ESS_arr.append(jtfilter.ess)
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
+        
+        # idx = sum(nensemble[:jtfilter.ensemble_rank]) + i
+        # #print(idx, jtfilter.ensemble_rank)
+        # outfile = File(f"../../DA_Results/non-smoothDA/paraview/{idx}_output.pvd", comm=jtfilter.subcommunicators.comm)
         model.w0.assign(jtfilter.ensemble[i][0])
+
+        
+        _,z = model.w0.split()
+        #print(k)
+        outfile[i].write(z, time = k)
         obsdata = model.obs().dat.data[:]
         for m in range(y.shape[1]):
             y_e_list[m].dlocal[i] = obsdata[m]
@@ -129,6 +169,18 @@ for k in range(N_obs):
         if COMM_WORLD.rank == 0:
             y_e[:, k, m] = y_e_list[m].data()
 
+    # for i in range(nensemble[jtfilter.ensemble_rank]):
+    #     model.w0.assign(jtfilter.ensemble[i][0])
+    #     _,z = model.w0.split()
+    #     Zall= Z.interpolate(z).dat.data[:]
+    #     for m in range(100):
+    #         y_e_list_allx[m].dlocal[i] = Zall[m]
+
+    # for m in range(100):
+    #     y_e_list_allx[m].synchronise()
+    #     if COMM_WORLD.rank == 0:
+    #         y_e_allx[:, k, m] = y_e_list_allx[m].data()
+
 if COMM_WORLD.rank == 0:
     #print(ESS_arr)
     print("Time shape", y_sim_obs_alltime_step.shape)
@@ -137,12 +189,12 @@ if COMM_WORLD.rank == 0:
     print("Ensemble member", y_e.shape)
     
     if not nudging:
-        np.save("../../DA_Results/mcmc_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/non-smoothDA/bs_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/mcmc_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/mcmc_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/non-smoothDA/bs_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/non-smoothDA/bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
     if nudging:
-        np.save("../../DA_Results/an_nudge_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/non-smoothDA/an_nudge_ESS.npy",np.array((ESS_arr)))
         #np.save("../../DA_Results/Nudge_temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/an_nudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/an_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/non-smoothDA/an_nudge_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/non-smoothDA/an_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
