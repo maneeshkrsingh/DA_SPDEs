@@ -10,12 +10,12 @@ from pyadjoint import AdjFloat
 from nudging.models.stochastic_Camassa_Holm import Camsholm
 
 import os
-os.makedirs('../../DA_Results/', exist_ok=True)
+os.makedirs('../../DA_Results/smoothDA/', exist_ok=True)
 
 ## Load data
 
 # y_exact = np.load('../../DA_Results/y_true.npy')
-y = np.load('../../DA_Results/y_obs.npy') 
+y = np.load('../../DA_Results/smoothDA/y_obs.npy') 
 N_obs = y.shape[0]
 ys = y.shape
 
@@ -26,7 +26,7 @@ ys = y.shape
 nsteps = 5
 xpoints =81 # no of weather station
 x_disc = 100 # no of discrete points 
-model = Camsholm(100, nsteps, xpoints, seed = 123456789, lambdas=True)
+model = Camsholm(100, nsteps, xpoints,noise_scale = 1.0, seed = 123456789, lambdas=True, salt=False)
 
 MALA = False
 verbose = True
@@ -113,7 +113,7 @@ for m in range(x_disc):
 
 
 if COMM_WORLD.rank == 0:
-    np.save("../../DA_Results/init_ensemble.npy", y_init)
+    np.save("../../DA_Results/smoothDA/init_ensemble.npy", y_init)
 
 
 def log_likelihood(y, Y):
@@ -231,14 +231,14 @@ if COMM_WORLD.rank == 0:
     
     
     if not nudging:
-        np.save("../../DA_Results/smooth_mcmcwt_ESS.npy",np.array((ESS_arr)))
-        #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/smooth_mcmcwt_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/smooth_mcmcwt_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        # np.save("../../DA_Results/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        np.save("../../DA_Results/smoothDA/smooth_bs_ESS.npy",np.array((ESS_arr)))
+        #np.save("../../DA_Results/smoothDA/temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/smoothDA/smooth_bs_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/smoothDA/smooth_bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        # np.save("../../DA_Results/smoothDA/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
     if nudging:
-        np.save("../../DA_Results/smooth_nudge_ESS.npy",np.array((ESS_arr)))
-        #np.save("../../DA_Results/nudge_temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/smooth_nudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
-        # np.save("../../DA_Results/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
+        np.save("../../DA_Results/smoothDA/smooth_nudge_ESS.npy",np.array((ESS_arr)))
+        #np.save("../../DA_Results/smoothDA/nudge_temp.npy",np.array((temp_run_count)))
+        np.save("../../DA_Results/smoothDA/smooth_nudge_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/smoothDA/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        # np.save("../../DA_Results/smoothDA/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
