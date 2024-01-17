@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from nudging.models.stochastic_Camassa_Holm import Camsholm
 import os
 
-os.makedirs('../../DA_Results/smoothDA/', exist_ok=True)
+os.makedirs('../../DA_Results/smoothDA/SALT/', exist_ok=True)
 
 """
 create some synthetic data/observation data at T_1 ---- T_Nobs
@@ -20,7 +20,7 @@ nsteps = 5
 xpoints = 81 # no of weather station
 
 N_obs = 100
-model = Camsholm(100, nsteps, xpoints, noise_scale = 1.0, seed=1234567890, salt=False)
+model = Camsholm(100, nsteps, xpoints, noise_scale = 1.0, seed=1234567890, salt=True)
 model.setup()
 x, = SpatialCoordinate(model.mesh)
 
@@ -86,8 +86,8 @@ u.assign(abs(a)*dW_3+dx0)
 # plt.show()
 
 
-np.save("../../DA_Results/smoothDA/y_inc_true.npy", u.dat.data[:])
-
+np.save("../../DA_Results/smoothDA/SALT/y_inc_true.npy", u.dat.data[:])
+truth = File("../../DA_Results/smoothDA/SALT/nudge_paraview/truth.pvd")
 
 y_true = model.obs().dat.data[:]
 y_obs_full = np.zeros((N_obs, np.size(y_true)))
@@ -97,6 +97,8 @@ y_true_full = np.zeros((N_obs, np.size(y_true)))
 for i in range(N_obs):
     model.randomize(X_truth)
     model.run(X_truth, X_truth) # run method for every time step
+    _,z = X_truth[0].split()
+    truth.write(z)
     y_true = model.obs().dat.data[:]
     y_true_full[i,:] = y_true
     y_noise = model.rg.normal(0.0, 0.5, xpoints)  
@@ -105,8 +107,8 @@ for i in range(N_obs):
     y_obs_full[i,:] = y_obs 
 
 
-np.save("../../DA_Results/smoothDA/y_true.npy", y_true_full)
-np.save("../../DA_Results/smoothDA/y_obs.npy", y_obs_full)
+np.save("../../DA_Results/smoothDA/SALT/y_true.npy", y_true_full)
+np.save("../../DA_Results/smoothDA/SALT/y_obs.npy", y_obs_full)
 
 
 

@@ -10,12 +10,12 @@ from pyadjoint import AdjFloat
 from nudging.models.stochastic_Camassa_Holm import Camsholm
 
 import os
-os.makedirs('../../DA_Results/smoothDA/', exist_ok=True)
+os.makedirs('../../DA_Results/smoothDA/SALT/', exist_ok=True)
 
 ## Load data
 
 # y_exact = np.load('../../DA_Results/y_true.npy')
-y = np.load('../../DA_Results/smoothDA/y_obs.npy') 
+y = np.load('../../DA_Results/smoothDA/SALT/y_obs.npy') 
 N_obs = y.shape[0]
 ys = y.shape
 
@@ -26,7 +26,7 @@ ys = y.shape
 nsteps = 5
 xpoints =81 # no of weather station
 x_disc = 100 # no of discrete points 
-model = Camsholm(100, nsteps, xpoints,noise_scale = 1.0, seed = 123456789, lambdas=True, salt=False)
+model = Camsholm(100, nsteps, xpoints,noise_scale = 1.0, seed = 123456789, lambdas=True, salt=True)
 
 MALA = False
 verbose = True
@@ -38,7 +38,7 @@ jtfilter = jittertemp_filter(n_jitt = 5, delta = 0.15,
 
 # jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [6]*25
+nensemble = [2]*5
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -113,7 +113,7 @@ for m in range(x_disc):
 
 
 if COMM_WORLD.rank == 0:
-    np.save("../../DA_Results/smoothDA/init_ensemble.npy", y_init)
+    np.save("../../DA_Results/smoothDA/SALT/init_ensemble.npy", y_init)
 
 
 def log_likelihood(y, Y):
@@ -148,8 +148,19 @@ if COMM_WORLD.rank == 0:
     #print(np.shape(y_sim_obs_allobs_step))
 
 
+# outfile = []
+# for i in range(nensemble[jtfilter.ensemble_rank]):
+#     idx = sum(nensemble[:jtfilter.ensemble_rank]) + i
+#     #print(idx, jtfilter.ensemble_rank)
+#     outfile.append(File(f"../../DA_Results/smoothDA/SALT/nudge_paraview/{idx}_output.pvd", comm=jtfilter.subcommunicators.comm))
+
+
 ESS_arr = []
+weights_fin = []
+check_weights_fin = []
 temp_run_count =[]
+
+
 # do assimiliation step
 for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
@@ -195,6 +206,8 @@ for k in range(N_obs):
         ESS_arr = []
         np.append(ESS_arr, jtfilter.ess)
         ESS_arr.append(jtfilter.ess)
+        weights_fin.append(jtfilter.weights)
+        check_weights_fin.append(jtfilter.check_weights)
         #print('Step', k,  'Jittering accept_cout', jtfilter.accept_jitt_count)
         #temp_run_count.append(jtfilter.temp_count)
         
@@ -202,6 +215,10 @@ for k in range(N_obs):
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
         model.w0.assign(jtfilter.ensemble[i][0])
+        #save paraview data
+        # _,z = model.w0.split()
+        # outfile[i].write(z, time = k)
+
         obsdata = model.obs().dat.data[:]
         for m in range(y.shape[1]):
             y_e_list[m].dlocal[i] = obsdata[m]
@@ -231,14 +248,17 @@ if COMM_WORLD.rank == 0:
     
     
     if not nudging:
-        np.save("../../DA_Results/smoothDA/smooth_bs_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_weight.npy",np.array((weights_fin)))
         #np.save("../../DA_Results/smoothDA/temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/smoothDA/smooth_bs_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/smoothDA/smooth_bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/smoothDA/mcmcnew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
-    if nudging:
-        np.save("../../DA_Results/smoothDA/smooth_nudge_ESS.npy",np.array((ESS_arr)))
+    #if nudging:
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_ESS.npy",np.array((ESS_arr)))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_weight.npy",np.array((weights_fin)))
+        #np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_check_lambda_weight.npy",np.array((check_weights_fin)))
         #np.save("../../DA_Results/smoothDA/nudge_temp.npy",np.array((temp_run_count)))
-        np.save("../../DA_Results/smoothDA/smooth_nudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/smoothDA/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_assimilated_ensemble.npy", y_e)
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
         # np.save("../../DA_Results/smoothDA/nudgenew_simualated_all_time_obs.npy", y_sim_obs_allobs_step_new)
