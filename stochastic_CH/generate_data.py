@@ -17,9 +17,9 @@ Pick initial conditon
 run model, get obseravation
 add observation noise N(0, sigma^2)
 """
-N_obs = 10
+N_obs = 100
 nsteps = 5
-xpoints = 25
+xpoints = 40
 model = Camsholm(100, nsteps, xpoints, seed=12345, noise_scale = 0.5,  lambdas=False)
 model.setup()
 obs_shape = model.obs().dat.data[:]

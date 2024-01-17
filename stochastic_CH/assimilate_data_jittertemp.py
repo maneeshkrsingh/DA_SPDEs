@@ -16,7 +16,7 @@ os.makedirs('../../DA_Results/non-smoothDA/', exist_ok=True)
     Do assimilation step for tempering and jittering steps 
 """
 nsteps = 5
-xpoints = 25
+xpoints = 40
 model = Camsholm(100, nsteps, xpoints, seed = 12345, noise_scale = 0.5, lambdas=True)
 model.setup()
 
@@ -39,7 +39,7 @@ nudging = False
 
 jtfilter = bootstrap_filter(verbose=verbose)
 
-nensemble = [5]*6
+nensemble = [5]*10
 jtfilter.setup(nensemble, model)
 
 x, = SpatialCoordinate(model.mesh) 
@@ -101,6 +101,7 @@ if COMM_WORLD.rank == 0:
     y_e_allx = np.zeros((np.sum(nensemble), ys[0], 100))
 
 ESS_arr = []
+weights_fin = []
 # temp_run_count =[]
 # do assimiliation step
 
@@ -148,6 +149,7 @@ for k in range(N_obs):
     gc.collect()
     if COMM_WORLD.rank == 0:
         ESS_arr.append(jtfilter.ess)
+        weights_fin.append(jtfilter.weights)
         
     for i in range(nensemble[jtfilter.ensemble_rank]):
         
@@ -190,6 +192,7 @@ if COMM_WORLD.rank == 0:
     
     if not nudging:
         np.save("../../DA_Results/non-smoothDA/bs_ESS.npy",np.array((ESS_arr)))
+        np.save("../../DA_Results/non-smoothDA/bs_weight.npy",np.array((weights_fin)))
         #np.save("../../DA_Results/temp.npy",np.array((temp_run_count)))
         np.save("../../DA_Results/non-smoothDA/bs_assimilated_ensemble.npy", y_e)
         np.save("../../DA_Results/non-smoothDA/bs_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
