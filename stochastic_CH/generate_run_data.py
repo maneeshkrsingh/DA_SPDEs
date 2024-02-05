@@ -19,7 +19,7 @@ add observation noise N(0, sigma^2)
 nsteps = 5
 xpoints = 81 # no of weather station
 
-N_obs = 100
+N_obs = 1000
 model = Camsholm(100, nsteps, xpoints, noise_scale = 1.0, seed=1234567890, salt=True)
 model.setup()
 x, = SpatialCoordinate(model.mesh)
@@ -72,7 +72,7 @@ dw_solver_2.solve()
 dw_solver_3.solve()
 
 _, u = X_truth[0].split()
-u.assign(abs(a)*dW_3+dx0)
+u.assign(abs(a)*dW_3+abs(dx0))
 
 
 # _, u0 = Y_truth[0].split()
@@ -87,18 +87,21 @@ u.assign(abs(a)*dW_3+dx0)
 
 
 np.save("../../DA_Results/smoothDA/SALT/y_inc_true.npy", u.dat.data[:])
-truth = File("../../DA_Results/smoothDA/SALT/nudge_paraview/truth.pvd")
+# truth = File("../../DA_Results/smoothDA/SALT/nudge_paraview/truth.pvd")
 
 y_true = model.obs().dat.data[:]
 y_obs_full = np.zeros((N_obs, np.size(y_true)))
 y_true_full = np.zeros((N_obs, np.size(y_true)))
-
+E_Nobs = np.zeros((N_obs))
 
 for i in range(N_obs):
     model.randomize(X_truth)
     model.run(X_truth, X_truth) # run method for every time step
     _,z = X_truth[0].split()
-    truth.write(z)
+    E = assemble((0.5*z*z + 0.5*z.dx(0)*z.dx(0))*dx)
+    #print('energy', E)
+    E_Nobs[i] = E
+    # truth.write(z)
     y_true = model.obs().dat.data[:]
     y_true_full[i,:] = y_true
     y_noise = model.rg.normal(0.0, 0.5, xpoints)  
@@ -106,12 +109,15 @@ for i in range(N_obs):
     y_obs = y_true + y_noise   
     y_obs_full[i,:] = y_obs 
 
+np.save("../../DA_Results/smoothDA/SALT/energy_true.npy", E_Nobs)
 
 np.save("../../DA_Results/smoothDA/SALT/y_true.npy", y_true_full)
 np.save("../../DA_Results/smoothDA/SALT/y_obs.npy", y_obs_full)
 
+print(y_true_full.shape)
 
-
+# plt.plot(y_true_allmshpoint)
+# plt.show()
 
 
 # y_alltime = model.obs().dat.data[:]
