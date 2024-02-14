@@ -42,7 +42,7 @@ p = TestFunction(model.V)
 q = TrialFunction(model.V)
 xi = Function(model.V) # To insert noise 
 a = kappa_inv_sq*inner(grad(p), grad(q))*dx + p*q*dx
-L_1 = (1/CellVolume(model.mesh)**0.5)*p*abs(xi)*dx
+L_1 = (1/CellVolume(model.mesh)**0.5)*p*xi*dx
 dW_1 = Function(model.V) # For soln vector
 dW_prob_1 = LinearVariationalProblem(a, L_1, dW_1)
 dw_solver_1 = LinearVariationalSolver(dW_prob_1,
@@ -106,7 +106,7 @@ def obs_atall(X):
     return Y            
 
 
-np.save("../../DA_Results/smoothDA/SALT/y_inc_true.npy", u.dat.data[:])
+np.save("../../DA_Results/smoothDA/SALT/half_y_inc_true.npy", u.dat.data[:])
 # truth = File("../../DA_Results/smoothDA/SALT/half_domain_mcmc_paraview/truth.pvd")
 
 y_true = model.obs().dat.data[:]
@@ -115,14 +115,16 @@ y_true_full = np.zeros((N_obs, np.size(y_true)))
 
 y_obs_allmeshpoint = np.zeros((N_obs, 101))
 y_true_allmeshpoint = np.zeros((N_obs, 101))
-
+E_Nobs = np.zeros((N_obs))
 
 for i in range(N_obs):
     model.randomize(X_truth)
     model.run(X_truth, X_truth) # run method for every time step
-    # _,z = X_truth[0].split()
+    _,z = X_truth[0].split()
     # truth.write(z)
-
+    E = assemble((0.5*z*z + 0.5*z.dx(0)*z.dx(0))*dx)
+    #print('energy', E)
+    E_Nobs[i] = E
     y_true = model.obs().dat.data[:]
     y_true_full[i,:] = y_true
     y_noise = model.rg.normal(0.0, 0.5, xpoints)  
@@ -137,11 +139,14 @@ for i in range(N_obs):
     y_obs_allmeshpoint[i,:] = y_true_allmshpoint + y_noise_allmshpoint
 
 print(y_true_allmshpoint.shape)
-np.save("../../DA_Results/smoothDA/SALT/y_true.npy", y_true_full)
-np.save("../../DA_Results/smoothDA/SALT/y_obs.npy", y_obs_full)
 
-np.save("../../DA_Results/smoothDA/SALT/y_true_allmeshpoint.npy", y_true_allmeshpoint)
-np.save("../../DA_Results/smoothDA/SALT/y_obs_allmeshpoint.npy", y_obs_allmeshpoint)
+np.save("../../DA_Results/smoothDA/SALT/half_energy_true.npy", E_Nobs)
+
+np.save("../../DA_Results/smoothDA/SALT/half_y_true.npy", y_true_full)
+np.save("../../DA_Results/smoothDA/SALT/half_y_obs.npy", y_obs_full)
+
+np.save("../../DA_Results/smoothDA/SALT/half_y_true_allmeshpoint.npy", y_true_allmeshpoint)
+np.save("../../DA_Results/smoothDA/SALT/half_y_obs_allmeshpoint.npy", y_obs_allmeshpoint)
 
 
 # plt.plot(y_true_allmshpoint)

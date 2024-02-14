@@ -15,7 +15,7 @@ os.makedirs('../../DA_Results/smoothDA/SALT/', exist_ok=True)
 ## Load data
 
 # y_exact = np.load('../../DA_Results/y_true.npy')
-y = np.load('../../DA_Results/smoothDA/SALT/y_obs.npy') 
+y = np.load('../../DA_Results/smoothDA/SALT/half_y_obs.npy') 
 N_obs = y.shape[0]
 ys = y.shape
 
@@ -159,7 +159,8 @@ for m in range(y.shape[1]):
     y_sim_obs_list.append(y_sim_obs_shared)
     y_sim_obs_list_new.append(y_sim_obs_shared)
 
-
+energy_shared = SharedArray(partition=nensemble, 
+                                  comm=jtfilter.subcommunicators.ensemble_comm)
 
 for m in range(101): 
     y_e_allXshared = SharedArray(partition=nensemble, 
@@ -172,6 +173,7 @@ if COMM_WORLD.rank == 0:
     y_sim_obs_alltime_step = np.zeros((np.sum(nensemble),nsteps,  ys[1]))
     y_sim_obs_allobs_step = np.zeros((np.sum(nensemble),nsteps*N_obs,  ys[1]))
     y_e_allX = np.zeros((np.sum(nensemble),ys[0],  101))
+    energy_array = np.zeros((np.sum(nensemble),N_obs))
 
 
 
@@ -240,11 +242,14 @@ for k in range(N_obs):
     for i in range(nensemble[jtfilter.ensemble_rank]):
         model.w0.assign(jtfilter.ensemble[i][0])
         #save paraview data
-        # _,z = model.w0.split()
+        _,z = model.w0.split()
+        E = assemble((0.5*z*z + 0.5*z.dx(0)*z.dx(0))*dx)
         # outfile[i].write(z, time = k)
+        energy_shared.dlocal[i] = E
         obsdata = model.obs().dat.data[:]
         for m in range(y.shape[1]):
             y_e_list[m].dlocal[i] = obsdata[m]
+        
         #store at all mesh points
         sim_allX = obs_atall(jtfilter.ensemble[i]).dat.data[:]
         for n in range(101):
@@ -252,7 +257,9 @@ for k in range(N_obs):
 
 
 
-
+    energy_shared.synchronise()
+    if COMM_WORLD.rank == 0:
+        energy_array[:,k] = energy_shared.data()
     
 
     for m in range(y.shape[1]):
@@ -274,16 +281,18 @@ if COMM_WORLD.rank == 0:
     
     
     if not nudging:
-        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_ESS.npy",np.array((ESS_arr)))
-        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_weight.npy",np.array((weights_fin)))
-        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_assimilated_ensemble_allX.npy", y_e_allX)
-        np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/smoothDA/SALT/half_smooth_mcmcwt_Energy.npy",np.mean(energy_array, axis=0))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_ESS.npy",np.array((ESS_arr)))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_weight.npy",np.array((weights_fin)))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_assimilated_ensemble.npy", y_e)
+        np.save("../../DA_Results/smoothDA/SALT/half_smooth_mcmcwt_assimilated_ensemble_allX.npy", y_e_allX)
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_mcmcwt_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
 
     if nudging:
-        np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_ESS.npy",np.array((ESS_arr)))
-        np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_weight.npy",np.array((weights_fin)))
-        np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_assimilated_ensemble.npy", y_e)
-        np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_assimilated_ensemble_allX.npy", y_e_allX)
-        np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
+        np.save("../../DA_Results/smoothDA/SALT/half_smooth_nudge_Energy.npy",np.mean(energy_array, axis=0))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_ESS.npy",np.array((ESS_arr)))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_weight.npy",np.array((weights_fin)))
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_assimilated_ensemble.npy", y_e)
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_assimilated_ensemble_allX.npy", y_e_allX)
+        # np.save("../../DA_Results/smoothDA/SALT/smooth_nudge_simualated_all_time_obs.npy", y_sim_obs_allobs_step)
 
