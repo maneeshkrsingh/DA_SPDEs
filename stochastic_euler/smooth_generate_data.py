@@ -17,32 +17,37 @@ run model, get true value and obseravation and use paraview for viewing
 add observation noise N(0, sigma^2) 
 """
 #np.random.seed(138)
-n = 8
+N_obs = 500
+n = 32
 nsteps = 5
 model = Euler_SD(n, nsteps=nsteps)
 model.setup()
+x = SpatialCoordinate(model.mesh)
 
 X_truth = model.allocate()
+
+############################# trail ###########################################################################
+
+
 q0 = X_truth[0]
-x = SpatialCoordinate(model.mesh)
+# q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])) 
+
 q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
                         +0.02*sin(2*pi*x[0])+0.02*sin(2*pi*x[1])+0.3*cos(10*pi*x[0])*cos(4*pi*x[1])) 
 
-# q0.interpolate(0.1 * sin(x[0]) * sin(x[1]))
 
-# def gradperp(u):
-#     return as_vector((-u.dx(1), u.dx(0)))
-
-N_obs = 10
-Vu = VectorFunctionSpace(model.mesh, "DQ", 0)  # DQ elements for velocity
-
-# smooth intial conditon
+#print(model.mesh.hmax())
+cell_area = fd.CellVolume(model.mesh)
+h = sqrt(assemble((1/n**2)*dx(model.mesh))) 
+print(h*h)
+################################### Using Matern formula ###########################################
+#param
 sp = {"ksp_type": "cg", "pc_type": "lu",
               "pc_factor_mat_solver_type": "mumps"}
 
+
 # Setup noise term using Matern formula
-W_F = FunctionSpace(model.mesh, "DG", 0)
-dW = Function(W_F)
+dW = Function(model.W_F)
 dW_phi = TestFunction(model.Vcg)
 dU = TrialFunction(model.Vcg)
 
@@ -54,24 +59,43 @@ dU_1 = fd.Function(model.Vcg)
 dU_2 = fd.Function(model.Vcg)
 dU_3 = fd.Function(model.Vcg)
 
-bcs_dw = fd.DirichletBC(model.Vcg,  fd.zero(), ("on_boundary"))
-a_dW = kappa_inv_sq*fd.inner(fd.grad(dU), fd.grad(dW_phi))*dx \
-            + dU*dW_phi*dx
+#bcs_dw = fd.DirichletBC(model.Vcg,  fd.zero(), ("on_boundary"))
+a_dW = kappa_inv_sq*fd.inner(fd.grad(dW_phi),fd.grad(dU))*dx  + dW_phi* dU*dx
 L_w1 = alpha_w*dW*dW_phi*dx
-w_prob1 = fd.LinearVariationalProblem(a_dW, L_w1, dU_1, bcs=bcs_dw)
+w_prob1 = fd.LinearVariationalProblem(a_dW, L_w1, dU_1)
 wsolver1 = fd.LinearVariationalSolver(w_prob1, solver_parameters=sp)
 
 L_w2 = alpha_w*dU_1*dW_phi*dx
-w_prob2 = fd.LinearVariationalProblem(a_dW, L_w2, dU_2, bcs=bcs_dw)
+w_prob2 = fd.LinearVariationalProblem(a_dW, L_w2, dU_2)
 wsolver2 = fd.LinearVariationalSolver(w_prob2, solver_parameters=sp)
 
 L_w3 = alpha_w*dU_2*dW_phi*dx
-w_prob3 = fd.LinearVariationalProblem(a_dW, L_w3, dU_3, bcs=bcs_dw)
+w_prob3 = fd.LinearVariationalProblem(a_dW, L_w3, dU_3)
 wsolver3 = fd.LinearVariationalSolver(w_prob3,  solver_parameters=sp)
 
 
+dW.assign(model.rg.normal(model.W_F, 0., 1.0))
+
+dU= fd.Function(model.Vcg)
+wsolver1.solve()
+wsolver2.solve()
+wsolver3.solve()
+
+dU.assign(dU_3)
+
+noise = File("../../DA_Results/2DEuler/paraview/noise.pvd")
+noise.write(dU)
+
+# # plt.plot(dU.dat.data[:], 'b-', label='true soln')
+# # plt.legend()
+# # # plt.plot(dw_std, 'r-')
+# # plt.show()
 
 
+# q0_init = X_truth[0]
+# q0_init.interpolate(dU_3)
+
+##########################################################################
 
 # #To store velocity values 
 v_true = model.obs().dat.data[:]
@@ -92,8 +116,9 @@ u2_obs_all = np.zeros((N_obs, np.size(v2_true)))
 #     Y.interpolate(u)
 #     return Y
 
-model.q0.rename("Potential vorticity")
+model.q1.rename("Potential vorticity")
 model.psi0.rename("Stream function")
+Vu = VectorFunctionSpace(model.mesh, "DQ", 0)  # DQ elements for velocity
 v = Function(Vu, name="gradperp(stream function)")
 
 #v = Function(Vu)
@@ -103,6 +128,7 @@ truth = File("../../DA_Results/2DEuler/paraview/truth.pvd")
 
 # Exact numerical approximation 
 for i in range(N_obs):
+    print('step', i)
     model.randomize(X_truth)
     model.run(X_truth, X_truth)
     model.q1.assign(X_truth[0])
@@ -112,7 +138,7 @@ for i in range(N_obs):
     # u1 = u_1.dx(1)
     
     # print(type(u1), type(u_1) )
-    truth.write(model.q0, model.psi0, v)
+    truth.write(model.q1, model.psi0, v)
 
 
 

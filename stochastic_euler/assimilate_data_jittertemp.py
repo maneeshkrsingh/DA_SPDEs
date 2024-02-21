@@ -7,22 +7,22 @@ from pyadjoint import AdjFloat
 
 # import time
 # start_time = time.time()
-
-
-
 from nudging.models.stochastic_euler import Euler_SD
+import os
+
+os.makedirs('../../DA_Results/2DEuler/', exist_ok=True)
 
 """ read obs from saved file 
     Do assimilation step for tempering and jittering steps 
 """
 
-n = 8
+n = 32
 nsteps = 5
 model = Euler_SD(n, nsteps=nsteps, lambdas=True)
 
 MALA = False
 verbose = True
-nudging = True
+nudging = False
 jtfilter = jittertemp_filter(n_jitt = 2, delta = 0.1,
                               verbose=verbose, MALA=MALA,
                               nudging=nudging, visualise_tape=False)
@@ -33,10 +33,10 @@ jtfilter = jittertemp_filter(n_jitt = 2, delta = 0.1,
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 2, rho= 0.99,
 #                             verbose=verbose, MALA=MALA)
 # Load data
-u_exact = np.load('u_true_data.npy')
-u_vel = np.load('u_obs_data.npy') 
+u_exact = np.load('../../DA_Results/2DEuler/u_true_data.npy')
+u_vel = np.load('../../DA_Results/2DEuler/u_obs_data.npy') 
 
-nensemble = [2]*25
+nensemble = [5]*20
 
 
 jtfilter.setup(nensemble, model)
@@ -46,7 +46,7 @@ x = SpatialCoordinate(model.mesh)
 #prepare the initial ensemble
 for i in range(nensemble[jtfilter.ensemble_rank]):
     a = model.rg.normal(model.R, 0., 0.5) 
-    b = model.rg.mormal(model.R, 0., 0.5)
+    b = model.rg.normal(model.R, 0., 0.5)
     q0_in = a*sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*b*cos(6*pi*x[0])*cos(6*pi*x[1])\
                 +0.02*a*sin(2*pi*x[0])+0.02*a*sin(2*pi*x[1])+0.3*b*cos(10*pi*x[0])*cos(4*pi*x[1]) 
 
@@ -151,7 +151,12 @@ if COMM_WORLD.rank == 0:
     u_sim_allobs_step = np.stack(( u1_sim_obs_allobs_step, u2_sim_obs_allobs_step), axis = -1)
     print(u_e.shape)
     print(u_sim_allobs_step.shape)
-    np.save("Velocity_ensemble.npy", u_e)
-    np.save("Velocity simualated_all_time.npy", u_sim_allobs_step)
+    #np.save("../../DA_Results/2DEuler/Velocity_ensemble.npy", u_e)
+    #np.save("../../DA_Results/2DEuler/Velocity simualated_all_time.npy", u_sim_allobs_step)
 
+
+    if not nudging:
+        np.save("../../DA_Results/2DEuler/mcmcwt_assimilated_Velocity_ensemble.npy", u_e)
+    if nudging:
+        np.save("../../DA_Results/2DEuler/nudge_assimilated_Velocity_ensemble.npy", u_e)
 
