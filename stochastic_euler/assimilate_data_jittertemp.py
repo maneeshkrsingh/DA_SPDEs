@@ -1,12 +1,11 @@
 from firedrake import *
+import firedrake as fd
 from nudging import *
 import numpy as np
 import matplotlib.pyplot as plt
 from firedrake.petsc import PETSc
 from pyadjoint import AdjFloat
 
-# import time
-# start_time = time.time()
 from nudging.models.stochastic_euler import Euler_SD
 import os
 
@@ -16,25 +15,26 @@ os.makedirs('../../DA_Results/2DEuler/', exist_ok=True)
     Do assimilation step for tempering and jittering steps 
 """
 
-n = 32
+n = 16
 nsteps = 5
-model = Euler_SD(n, nsteps=nsteps, lambdas=True)
+dt = 0.1
+model = Euler_SD(n, nsteps=nsteps, dt = dt, noise_scale=0.25)
 
 MALA = False
 verbose = True
 nudging = False
-jtfilter = jittertemp_filter(n_jitt = 2, delta = 0.1,
-                              verbose=verbose, MALA=MALA,
-                              nudging=nudging, visualise_tape=False)
+# jtfilter = jittertemp_filter(n_jitt = 2, delta = 0.1,
+#                               verbose=verbose, MALA=MALA,
+#                               nudging=nudging, visualise_tape=False)
 
 
-# jtfilter = bootstrap_filter(verbose=verbose)
+jtfilter = bootstrap_filter(verbose=verbose)
 
 # jtfilter = nudging_filter(n_temp=4, n_jitt = 2, rho= 0.99,
 #                             verbose=verbose, MALA=MALA)
 # Load data
-u_exact = np.load('../../DA_Results/2DEuler/u_true_data.npy')
-u_vel = np.load('../../DA_Results/2DEuler/u_obs_data.npy') 
+u_exact = np.load('../../DA_Results/2DEuler/u_true_data_new.npy')
+u_vel = np.load('../../DA_Results/2DEuler/u_obs_data_new.npy') 
 
 nensemble = [5]*20
 
@@ -43,16 +43,38 @@ jtfilter.setup(nensemble, model)
 
 x = SpatialCoordinate(model.mesh) 
 
-#prepare the initial ensemble
-for i in range(nensemble[jtfilter.ensemble_rank]):
-    a = model.rg.normal(model.R, 0., 0.5) 
-    b = model.rg.normal(model.R, 0., 0.5)
-    q0_in = a*sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*b*cos(6*pi*x[0])*cos(6*pi*x[1])\
-                +0.02*a*sin(2*pi*x[0])+0.02*a*sin(2*pi*x[1])+0.3*b*cos(10*pi*x[0])*cos(4*pi*x[1]) 
+# N_e = 10
+# with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.h5", 
+#                        'r') as afile:
+#     mesh = afile.load_mesh("mesh2d_per")
+#     for p in range(len(nensemble)):
+#         f = afile.load_function(mesh, "f_chp", idx = p) # checkpoint at only ranks 
 
-    # q0_in = 0.1 *a*b* sin(x[0]) * sin(x[1])
-    q = jtfilter.ensemble[i][0]
-    q.interpolate(q0_in)
+
+
+#prepare the initial ensemble
+
+with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.h5", 
+                       'r') as afile:
+    mesh = afile.load_mesh("mesh2d_per")
+    for i in range(nensemble[jtfilter.ensemble_rank]):
+        f = afile.load_function(mesh, "f_chp", idx = jtfilter.ensemble_rank) # checkpoint at only ranks 
+        # a = np.random.normal(0., 0.5) 
+        # b = np.random.normal(0., 0.5) 
+        # q0_in = a*f+b
+        q = jtfilter.ensemble[i][0]
+        q.interpolate(f)
+
+
+# for i in range(nensemble[jtfilter.ensemble_rank]):
+#     a = model.rg.normal(model.R, 0., 0.5) 
+#     b = model.rg.normal(model.R, 0., 0.5)
+#     q0_in = a*sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*b*cos(6*pi*x[0])*cos(6*pi*x[1])\
+#                 +0.02*a*sin(2*pi*x[0])+0.02*a*sin(2*pi*x[1])+0.3*b*cos(10*pi*x[0])*cos(4*pi*x[1]) 
+
+#     # q0_in = 0.1 *a*b* sin(x[0]) * sin(x[1])
+#     q = jtfilter.ensemble[i][0]
+#     q.interpolate(q0_in)
    
 
 def log_likelihood(y, Y):
