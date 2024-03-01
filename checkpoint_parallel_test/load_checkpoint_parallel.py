@@ -1,6 +1,7 @@
 from firedrake import *
 from nudging import *
 from nudging import LSDEModel
+from firedrake.petsc import PETSc
 
 T =1 
 nsteps = 10
@@ -15,14 +16,12 @@ nensemble = [5]*5
 simfilter = sim_filter()
 simfilter.setup(nensemble, model)
 
-with CheckpointFile("example.h5",  'r') as afile:
+with CheckpointFile("example.h5",  'r', comm=simfilter.subcommunicators.comm) as afile:
     mesh = afile.load_mesh("meshA")
     for ilocal in range(nensemble[simfilter.ensemble_rank]):
         iglobal = simfilter.layout.transform_index(ilocal, itype='l', rtype='g')
-        print('ilocal', ilocal, 'iglobal', iglobal)
-        f = afile.load_function(mesh, "f", idx = ilocal)
-        print('norm of f', norm(f))
+        f = afile.load_function(mesh, "f", idx = iglobal)
         q = simfilter.ensemble[ilocal][0]
         q.interpolate(f)
-        #print('ilocal', ilocal, 'iglobal', iglobal, norm(q))
+        print('ilocal', ilocal, 'iglobal', iglobal, norm(q))
 

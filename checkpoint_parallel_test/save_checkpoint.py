@@ -1,6 +1,5 @@
 import firedrake as fd
 
-
 nensemble = [5]*5
 
 mesh = fd.UnitIntervalMesh(1,  name="meshA")
