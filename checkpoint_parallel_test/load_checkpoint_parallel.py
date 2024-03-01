@@ -20,7 +20,9 @@ with CheckpointFile("example.h5",  'r', comm=simfilter.subcommunicators.comm) as
     mesh = afile.load_mesh("meshA")
     for ilocal in range(nensemble[simfilter.ensemble_rank]):
         iglobal = simfilter.layout.transform_index(ilocal, itype='l', rtype='g')
-        f = afile.load_function(mesh, "f", idx = iglobal)
+        print('ilocal', ilocal, 'iglobal', iglobal)
+        f = afile.load_function(mesh, "f", idx = ilocal)
+        print('norm of f', norm(f))
         q = simfilter.ensemble[ilocal][0]
         q.interpolate(f)
         print('ilocal', ilocal, 'iglobal', iglobal, norm(q))
