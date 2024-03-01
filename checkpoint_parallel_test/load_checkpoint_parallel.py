@@ -20,7 +20,7 @@ with CheckpointFile("example.h5",  'r') as afile:
     for ilocal in range(nensemble[simfilter.ensemble_rank]):
         iglobal = simfilter.layout.transform_index(ilocal, itype='l', rtype='g')
         print('ilocal', ilocal, 'iglobal', iglobal)
-        f = afile.load_function(mesh, "f", idx = ilocal)
+        f = afile.load_function(mesh, "f", idx = iglobal)
         print('norm of f', norm(f))
         q = simfilter.ensemble[ilocal][0]
         q.interpolate(f)
