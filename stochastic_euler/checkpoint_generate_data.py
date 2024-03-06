@@ -18,34 +18,56 @@ Pick initial conditon
 run model, get true value and obseravation and use paraview for viewing
 add observation noise N(0, sigma^2) 
 """
+
+truth_init = File("../../DA_Results/2DEuler/paraview_init_new/truth_init.pvd")
+truth_init_ptb = File("../../DA_Results/2DEuler/paraview_init_new/truth_init_ptb.pvd")
+particle_init = File("../../DA_Results/2DEuler/paraview_init_new/particle_init.pvd")
 #np.random.seed(138)
-nensemble = [5]*20
-N_obs = 50
-n = 16
-nsteps = 3
-dt = 0.1
-model = Euler_SD(n, nsteps=nsteps, dt = dt, noise_scale=0.25)
+nensemble = [6]*25
+N_obs = 500
+N_init = 500
+n = 128
+nsteps = 5
+dt = 0.01
+comm=MPI.COMM_WORLD
+
+
+mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
+model = Euler_SD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=0.25)
+
 model.setup()
 
 mesh = model.mesh
 x = SpatialCoordinate(mesh)
 
+model.q1.rename("Potential vorticity")
+model.psi0.rename("Stream function")
+Vu = VectorFunctionSpace(mesh, "DQ", 0)  # DQ elements for velocity
+v = Function(Vu, name="gradperp(stream function)")
 
 
 ############################# initilisation ############
 X0_truth = model.allocate()
 
-X0_truth[0].interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])) 
+X0_truth[0].interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1]))
 
 
-# run model for 100 times and store inital vorticity for generating data
-N_time = 20
-for i in range(N_time):
+# run model for 100 (20*5)  times and store inital vorticity for generating data
+
+for i in range(N_init):
+    print('init_step', i)
     model.randomize(X0_truth)
     model.run(X0_truth, X0_truth)
 
+
 X_truth = model.allocate()
 X_truth[0].assign(X0_truth[0])
+
+model.q1.assign(X_truth[0])
+model.psi_solver.solve()  # solved at t+1 for psi
+v.project(model.gradperp(model.psi0))
+truth_init.write(model.q1, model.psi0, v)
+#print(norm(X_truth[0]))
 ##########################################################################
 
 
@@ -60,10 +82,26 @@ u1_obs_all = np.zeros((N_obs, np.size(v1_true)))
 u2_obs_all = np.zeros((N_obs, np.size(v2_true)))
 
 
+# model.q1.rename("Potential vorticity")
+# model.psi0.rename("Stream function")
+# Vu = VectorFunctionSpace(mesh, "DQ", 0)  # DQ elements for velocity
+# v = Function(Vu, name="gradperp(stream function)")
+
+truth = File("../../DA_Results/2DEuler/paraview_init_new/truth.pvd")
+truth.write(model.q1, model.psi0, v)
+u_energy = []
 # Exact numerical approximation 
 for i in range(N_obs):
+    print('In N_obs step', i)
     model.randomize(X_truth)
     model.run(X_truth, X_truth)
+    model.q1.assign(X_truth[0])
+    model.psi_solver.solve()  # solved at t+1 for psi
+    v.project(model.gradperp(model.psi0))
+    #print(norm(v))
+    u_energy.append(norm(v))
+    truth.write(model.q1, model.psi0, v)
+
 
     u_VOM = model.obs()
    
@@ -85,52 +123,58 @@ for i in range(N_obs):
 u_true_all = np.stack((u1_true_all, u2_true_all), axis=-1)
 u_obs_all = np.stack((u1_obs_all, u2_obs_all), axis=-1)
 
+
+u_Energy = np.array((u_energy))
 np.save("../../DA_Results/2DEuler/u_true_data_new.npy", u_true_all)
 np.save("../../DA_Results/2DEuler/u_obs_data_new.npy", u_obs_all)
+np.save("../../DA_Results/2DEuler/u_energy_new.npy", u_Energy)
 
-
-# #for checkpointing
-X0_pertb = model.allocate()
-
-# small pertirbation init
+# To create initilaztion of particles, setup checkpointing
+# small pertirbation in init
 a = model.rg.normal(model.R, 0., 0.1) 
 b = model.rg.normal(model.R, 0., 0.1)
-c = model.rg.normal(model.R, 0., 0.1) 
-d = model.rg.normal(model.R, 0., 0.1)
-X0_pertb[0].interpolate(a*sin(8*pi*(x[0]+c))*sin(8*pi*(x[1]-d))+0.4*b*cos(6*pi*(x[0]+c))*cos(6*pi*(x[1]-d)))
+# c = model.rg.normal(model.R, 0., 0.1) 
+# d = model.rg.normal(model.R, 0., 0.1)
+
+X0_pertb = model.allocate()
+X0_pertb[0].interpolate((1+a)*sin(8*pi*(x[0]))*sin(8*pi*(x[1]))+0.4*(1+b)*cos(6*pi*(x[0]))*cos(6*pi*(x[1])))
 
 # run model for 100 times and store inital vorticity for generating data
-N_time = 20
-for i in range(N_time):
+for i in range(N_init):
+    print('In pertb step', i)
     model.randomize(X0_pertb)
     model.run(X0_pertb, X0_pertb)
 
 X_new = model.allocate()
 X_new[0].assign(X0_pertb[0])
-
-# #now do checkpointg
-
-comm=MPI.COMM_WORLD
-Lx = 2.0*fd.pi  # Zonal length
-Ly = 2.0*fd.pi  # Meridonal length
-mesh = fd.PeriodicRectangleMesh(n, n,Lx, Ly, direction="x",quadrilateral=True, comm=comm, name ="mesh2d_per")
+model.q1.assign(X_new[0])
+model.psi_solver.solve()  # solved at t+1 for psi
+v.project(model.gradperp(model.psi0))
+truth_init_ptb.write(model.q1, model.psi0, v)
 
 
-N_e = 10
+
+# #now do checkpointing
 Vdg = fd.FunctionSpace(mesh, "DQ", 1)  # PV space
 f_chp = Function(Vdg, name="f_chp")
 
-offset_list = []
-for i_rank in range(len(nensemble)):
-    offset_list.append(sum(nensemble[:i_rank]))
+
+#dump data 
+ndump = 5
+p_dump = 0
 
 with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.h5", 
                        'w') as afile:
-    afile.save_mesh(mesh)  # optional
-    for p in range(len(nensemble)):
-        N_chpt = (N_e+p)*10
-        for i in range(N_chpt):
-            model.randomize(X_new)
-            model.run(X_new, X_new)
-        f_chp.interpolate(X_new[0])
-        afile.save_function(f_chp, idx=p) # checkpoint only ranks 
+    afile.save_mesh(mesh)
+    for i in range(sum(nensemble)*ndump):
+        model.randomize(X_new)
+        model.run(X_new, X_new)
+        if i % ndump == 0:
+            print('checkpoint particle', p_dump , 'init')
+            f_chp.interpolate(X_new[0])
+            model.q1.assign(X_new[0])
+            model.psi_solver.solve()  # solved at t+1 for psi
+            v.project(model.gradperp(model.psi0))
+            particle_init.write(model.q1, model.psi0, v)
+            afile.save_function(f_chp, idx=p_dump) 
+            p_dump += 1

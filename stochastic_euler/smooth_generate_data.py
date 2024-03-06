@@ -2,8 +2,11 @@ from ctypes import sizeof
 from fileinput import filename
 from firedrake import *
 import firedrake as fd
+from pyop2.mpi import MPI
 import numpy as np
 import matplotlib.pyplot as plt
+from firedrake.petsc import PETSc
+
 
 from nudging.models.stochastic_euler import Euler_SD
 import os
@@ -19,14 +22,25 @@ add observation noise N(0, sigma^2)
 """
 #np.random.seed(138)
 nensemble = [5]*20
-N_obs = 2
-n = 64
+N_obs = 5
+n = 16
 nsteps = 5
-dt = 0.1
-model = Euler_SD(n, nsteps=nsteps, dt = dt, noise_scale=0.25)
+dt = 0.01
+
+comm=MPI.COMM_WORLD
+
+mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
+
+model = Euler_SD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=0.5)
+
+#model = Euler_SD(n, nsteps=nsteps, dt = dt, noise_scale=0.25)
 model.setup()
 mesh = model.mesh
 x = SpatialCoordinate(mesh)
+
+cell_area = fd.CellVolume(model.mesh)
+h = sqrt(assemble((1/n**2)*dx(model.mesh))) 
+#print('h:', h, 'cell area:', h*h)
 
 X0_truth = model.allocate()
 
@@ -35,27 +49,26 @@ X0_truth = model.allocate()
 
 q0 = X0_truth[0]
 
-q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])) 
+# q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])) 
 
-# q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
-#                         +0.02*sin(2*pi*x[0])+0.02*sin(2*pi*x[1])+0.3*cos(10*pi*x[0])*cos(4*pi*x[1])) 
+q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
+                        +0.02*sin(2*pi*x[0])+0.02*sin(2*pi*x[1])+0.3*cos(10*pi*x[0])*cos(4*pi*x[1])) 
 
 
 
 
 
 # run model for 100 times and store inital vorticity for generating data
-N_time = 100
+N_time = 5
 for i in range(N_time):
+    PETSc.Sys.Print('init_step', i)
     model.randomize(X0_truth)
     model.run(X0_truth, X0_truth)
 
 X_truth = model.allocate()
 X_truth[0].assign(X0_truth[0])
-#print(model.mesh.hmax())
-# cell_area = fd.CellVolume(model.mesh)
-# h = sqrt(assemble((1/n**2)*dx(model.mesh))) 
-# print('h:', h, 'cell area:', h*h)
+# print(model.mesh.hmax())
+
 ################################### Using Matern formula ###########################################
 #param
 # sp = {"ksp_type": "cg", "pc_type": "lu",
@@ -140,18 +153,18 @@ v = Function(Vu, name="gradperp(stream function)")
 
 #v = Function(Vu)
 
-truth = File("../../DA_Results/2DEuler/paraview_next/truth.pvd")
+truth = File("../../DA_Results/2DEuler/paraview_init_parallel/truth.pvd")
 truth.write(model.q1, model.psi0, v)
 u_energy = []
 # Exact numerical approximation 
 for i in range(N_obs):
-    #print('step', i)
+    PETSc.Sys.Print('step', i)
     model.randomize(X_truth)
     model.run(X_truth, X_truth)
     model.q1.assign(X_truth[0])
     model.psi_solver.solve()  # solved at t+1 for psi
     v.project(model.gradperp(model.psi0))
-    print(norm(v))
+    #print(norm(v))
     u_energy.append(norm(v))
     truth.write(model.q1, model.psi0, v)
 
@@ -164,6 +177,7 @@ for i in range(N_obs):
     u1_true_all[i,:] = u[:,0]
     u2_true_all[i,:] = u[:,1]
 
+    
     u_1_noise = np.random.normal(0.0, 0.25, (n+1)**2 ) # mean = 0, sd = 0.05
     u_2_noise = np.random.normal(0.0, 0.25, (n+1)**2 ) 
 
@@ -178,9 +192,9 @@ u_true_all = np.stack((u1_true_all, u2_true_all), axis=-1)
 u_obs_all = np.stack((u1_obs_all, u2_obs_all), axis=-1)
 
 
-u_Energy = np.array((u_energy))
-np.save("../../DA_Results/2DEuler/u_true_data_new.npy", u_true_all)
-np.save("../../DA_Results/2DEuler/u_obs_data_new.npy", u_obs_all)
-np.save("../../DA_Results/2DEuler/u_energy_new.npy", u_Energy)
+# u_Energy = np.array((u_energy))
+# np.save("../../DA_Results/2DEuler/u_true_data_new.npy", u_true_all)
+# np.save("../../DA_Results/2DEuler/u_obs_data_new.npy", u_obs_all)
+# np.save("../../DA_Results/2DEuler/u_energy_new.npy", u_Energy)
 
 

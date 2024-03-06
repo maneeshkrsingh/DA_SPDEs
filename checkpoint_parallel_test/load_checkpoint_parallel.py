@@ -11,7 +11,7 @@ D = 2.
 # model
 model = LSDEModel(A=A, D=D, nsteps=nsteps, dt=dt, lambdas=False)
 
-nensemble = [5]*5
+nensemble = [5]*20
 
 simfilter = sim_filter()
 simfilter.setup(nensemble, model)
