@@ -1,5 +1,5 @@
 from firedrake import *
-import firedrake as fd
+from firedrake.__future__ import interpolate
 from nudging import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +8,9 @@ import petsc4py
 from firedrake.petsc import PETSc
 from pyop2.mpi import MPI
 from pyadjoint import AdjFloat
+
+
+
 
 from nudging.models.stochastic_euler import Euler_SD
 import os
@@ -19,34 +22,32 @@ os.makedirs('../../DA_Results/2DEuler/', exist_ok=True)
 """
 
 # Load data
-u_exact = np.load('../../DA_Results/2DEuler/u_true_data_new.npy')
-u_vel = np.load('../../DA_Results/2DEuler/u_obs_data_new.npy') 
+u_exact = np.load('../../DA_Results/2DEuler/u_true_data_par.npy')
+u_vel = np.load('../../DA_Results/2DEuler/u_obs_data_par.npy') 
 
 nensemble = [6]*25
 
+
 # N_obs = 500
-n = 128
+n = 64
 nsteps = 5
-dt = 0.01
+dt = 0.025
 
-
-
-
-model = Euler_SD(n, nsteps=nsteps, mesh = False, dt = dt, noise_scale=0.25)
+model = Euler_SD(n, nsteps=nsteps, mesh = False, dt = dt, noise_scale=0.25, lambdas=True, salt=True)
 
 
 MALA = False
 verbose = True
 nudging = False
-# jtfilter = jittertemp_filter(n_jitt = 2, delta = 0.1,
-#                               verbose=verbose, MALA=MALA,
-#                               nudging=nudging, visualise_tape=False)
-jtfilter = bootstrap_filter(verbose=verbose)
+jtfilter = jittertemp_filter(n_jitt = 5, delta = 0.15,
+                              verbose=verbose, MALA=MALA,
+                              nudging=nudging, visualise_tape=False)
+# jtfilter = bootstrap_filter(verbose=verbose)
 
 jtfilter.setup(nensemble, model)
 
 
-with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.h5", 
+with CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.h5", 
                        'r', comm=jtfilter.subcommunicators.comm) as afile:
     mesh = afile.load_mesh("mesh2d_per")
     for ilocal in range(nensemble[jtfilter.ensemble_rank]):
@@ -59,7 +60,7 @@ with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.
 
 
 def log_likelihood(y, Y):
-    ll = (y-Y)**2/0.25**2/2*dx
+    ll = (y-Y)**2/0.1**2/2*dx
     return ll
 
 
@@ -157,7 +158,7 @@ if COMM_WORLD.rank == 0:
     #print(u_sim_allobs_step.shape)
 
     if not nudging:
-        np.save("../../DA_Results/2DEuler/bs_assimilated_Velocity_ensemble.npy", u_e)
+        np.save("../../DA_Results/2DEuler/mcmc_assimilated_Velocity_ensemble.npy", u_e)
     if nudging:
         np.save("../../DA_Results/2DEuler/nudge_assimilated_Velocity_ensemble.npy", u_e)
 
