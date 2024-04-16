@@ -17,12 +17,12 @@ run model, get true value and obseravation and use paraview for viewing
 add observation noise N(0, sigma^2) 
 """
 
-# truth_init = VTKFile("../../DA_Results/2DEuler/paraview_new/truth_init.pvd")
-# truth = VTKFile("../../DA_Results/2DEuler/paraview_new/truth.pvd")
-# truth_init_ptb = VTKFile("../../DA_Results/2DEuler/paraview_new/truth_init_ptb.pvd")
-# particle_init = VTKFile("../../DA_Results/2DEuler/paraview_new/particle_init.pvd")
+# truth_init = VTKFile("../../DA_Results/2DEuler/paraview_adtnoise/truth_init.pvd")
+# truth = VTKFile("../../DA_Results/2DEuler/paraview_adtnoise/truth.pvd")
+# truth_init_ptb = VTKFile("../../DA_Results/2DEuler/paraview_adtnoise/truth_init_ptb.pvd")
+# particle_init = VTKFile("../../DA_Results/2DEuler/paraview_adtnoise/particle_init.pvd")
 #np.random.seed(138)
-nensemble = [5]*20
+nensemble = [1]*1
 N_obs = 1
 N_init = 5
 n = 64
@@ -33,7 +33,7 @@ dt = 0.0125
 comm=fd.COMM_WORLD
 mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
 
-model = Euler_SD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=0.25, salt=True)
+model = Euler_SD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=0.5, salt=False)
 
 model.setup()
 
@@ -68,12 +68,13 @@ u1_init = np.zeros((np.size(v1_true)))
 u2_init = np.zeros((np.size(v2_true)))
 
 for i in range(N_init):
-    PETSc.Sys.Print('init_step', i)
+    PETSc.Sys.Print('=================init_step====================', i)
     model.randomize(X0_truth)
     model.run(X0_truth, X0_truth)
 
     model.q1.assign(X0_truth[0])
     model.psi_solver.solve()  # solved at t+1 for psi
+
     u_init_VOM = model.obs()
     u_init_VOM_out = Function(model.VVOM_out)
     u_init_VOM_out.interpolate(u_init_VOM)
@@ -84,7 +85,7 @@ for i in range(N_init):
             u2_init[:] = uinit[:,1]
             #print('Init', u1_init)
             u_init = np.stack((u1_init, u2_init), axis=-1)
-            np.save("../../DA_Results/2DEuler/u_init.npy", u_init)
+            #np.save("../../DA_Results/2DEuler/u_init.npy", u_init)
 
 X_truth = model.allocate()
 X_truth[0].assign(X0_truth[0])
@@ -92,7 +93,7 @@ X_truth[0].assign(X0_truth[0])
 model.q1.assign(X_truth[0])
 model.psi_solver.solve()  # solved at t+1 for psi
 v.project(model.gradperp(model.psi0))
-# truth_init.write(model.q1, model.psi0, v)
+#truth_init.write(model.q1, model.psi0, v)
 
 
 #print(norm(X_truth[0]))
@@ -127,7 +128,7 @@ u2_obs_all = np.zeros((N_obs, np.size(v2_true)))
 u_energy = []
 # Exact numerical approximation 
 for i in range(N_obs):
-    PETSc.Sys.Print('In N_obs step', i)
+    PETSc.Sys.Print('=============In N_obs step=================', i)
     model.randomize(X_truth)
     model.run(X_truth, X_truth)
     model.q1.assign(X_truth[0])
@@ -164,8 +165,8 @@ if comm.rank == 0:
 
 
     # geu_Energy = np.array((u_energy))
-    np.save("../../DA_Results/2DEuler/u_true_data_par.npy", u_true_all)
-    np.save("../../DA_Results/2DEuler/u_obs_data_par.npy", u_obs_all)
+    #np.save("../../DA_Results/2DEuler/u_true_data_par.npy", u_true_all)
+    #np.save("../../DA_Results/2DEuler/u_obs_data_par.npy", u_obs_all)
     # np.save("../../DA_Results/2DEuler/u_energy_new.npy", u_Energy)
 
 # u_Energy = np.array((u_energy))
@@ -183,7 +184,7 @@ X0_pertb[0].interpolate((1+a)*sin(8*pi*(x[0]))*sin(8*pi*(x[1]))+0.4*(1+b)*cos(6*
 
 # run model for 100 times and store inital vorticity for generating data
 for i in range(N_init):
-    PETSc.Sys.Print('In pertb step', i)
+    PETSc.Sys.Print('==============In pertb step====================', i)
     model.randomize(X0_pertb)
     model.run(X0_pertb, X0_pertb)
 
@@ -202,7 +203,7 @@ f_chp = Function(Vdg, name="f_chp")
 
 
 #dump data 
-ndump = 5
+ndump = 2
 p_dump = 0
 
 
@@ -215,7 +216,7 @@ with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.
         model.randomize(X_new)
         model.run(X_new, X_new)
         if i % ndump == 0:
-            PETSc.Sys.Print('checkpoint particle', p_dump , 'init')
+            PETSc.Sys.Print('===========checkpoint particle============', p_dump , 'init')
             f_chp.interpolate(X_new[0])
             model.q1.assign(X_new[0])
             model.psi_solver.solve()  # solved at t+1 for psi
@@ -232,6 +233,6 @@ with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.
                 u2_particle_init[p_dump,:] = u_particle[:,1]
                 #print(u1_particle_init)
                 u_particle_init = np.stack((u1_particle_init, u2_particle_init), axis=-1)
-                np.save("../../DA_Results/2DEuler/u_particle_init.npy", u_particle_init)
+                #np.save("../../DA_Results/2DEuler/u_particle_init.npy", u_particle_init)
     
             p_dump += 1

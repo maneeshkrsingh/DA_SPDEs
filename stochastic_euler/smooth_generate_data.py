@@ -22,12 +22,13 @@ add observation noise N(0, sigma^2)
 """
 #np.random.seed(138)
 nensemble = [5]*20
-N_obs = 5
-n = 16
+N_obs = 50
+N_time = 50
+n = 32
 nsteps = 5
 dt = 0.01
 
-comm=MPI.COMM_WORLD
+comm=fd.COMM_WORLD
 
 mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
 
@@ -40,7 +41,7 @@ x = SpatialCoordinate(mesh)
 
 cell_area = fd.CellVolume(model.mesh)
 h = sqrt(assemble((1/n**2)*dx(model.mesh))) 
-#print('h:', h, 'cell area:', h*h)
+PETSc.Sys.Print('h:', h, 'cell area:', h*h)
 
 X0_truth = model.allocate()
 
@@ -59,7 +60,7 @@ q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
 
 
 # run model for 100 times and store inital vorticity for generating data
-N_time = 5
+
 for i in range(N_time):
     PETSc.Sys.Print('init_step', i)
     model.randomize(X0_truth)
@@ -128,8 +129,18 @@ X_truth[0].assign(X0_truth[0])
 ##########################################################################
 
 # #To store velocity values 
-v_true = model.obs().dat.data[:]
 
+u_VOM = model.obs()
+u_VOM_out = Function(model.VVOM_out)
+u_VOM_out.interpolate(u_VOM)
+u = u_VOM_out.dat.data_ro.copy()
+
+
+
+#v_true = model.obs().dat.data[:]
+v_true = u_VOM_out.dat.data_ro.copy()
+
+PETSc.Sys.Print('here', v_true.shape)
 v1_true = v_true[:,0]
 v2_true = v_true[:,1]
 
@@ -137,6 +148,7 @@ u1_true_all = np.zeros((N_obs, np.size(v1_true)))
 u2_true_all = np.zeros((N_obs, np.size(v2_true)))
 u1_obs_all = np.zeros((N_obs, np.size(v1_true)))
 u2_obs_all = np.zeros((N_obs, np.size(v2_true)))
+# print(u1_true_all)
 
 # def obs(self):
 #     self.q1.assign(self.q0)  # assigned at time t+1
@@ -171,30 +183,35 @@ for i in range(N_obs):
 
 
     u_VOM = model.obs()
-   
-    u = u_VOM.dat.data[:]
+    u_VOM_out = Function(model.VVOM_out)
+    u_VOM_out.interpolate(u_VOM)
 
-    u1_true_all[i,:] = u[:,0]
-    u2_true_all[i,:] = u[:,1]
+    u = u_VOM_out.dat.data_ro.copy()
+    PETSc.Sys.Print('uhere', u.shape)
+    if comm.rank == 0:
+        u1_true_all[i,:] = u[:,0]
+        u2_true_all[i,:] = u[:,1]
+
 
     
-    u_1_noise = np.random.normal(0.0, 0.25, (n+1)**2 ) # mean = 0, sd = 0.05
-    u_2_noise = np.random.normal(0.0, 0.25, (n+1)**2 ) 
+        u_1_noise = np.random.normal(0.0, 0.25, (n+1)**2 ) # mean = 0, sd = 0.05
+        u_2_noise = np.random.normal(0.0, 0.25, (n+1)**2 ) 
 
-    u1_obs = u[:,0] + u_1_noise
-    u2_obs = u[:,1] + u_2_noise
-
-
-    u1_obs_all[i,:] = u1_obs
-    u2_obs_all[i,:] = u2_obs
-
-u_true_all = np.stack((u1_true_all, u2_true_all), axis=-1)
-u_obs_all = np.stack((u1_obs_all, u2_obs_all), axis=-1)
+        u1_obs = u[:,0] + u_1_noise
+        u2_obs = u[:,1] + u_2_noise
 
 
-# u_Energy = np.array((u_energy))
-# np.save("../../DA_Results/2DEuler/u_true_data_new.npy", u_true_all)
-# np.save("../../DA_Results/2DEuler/u_obs_data_new.npy", u_obs_all)
-# np.save("../../DA_Results/2DEuler/u_energy_new.npy", u_Energy)
+        u1_obs_all[i,:] = u1_obs
+        u2_obs_all[i,:] = u2_obs
+
+if comm.rank == 0:
+    u_true_all = np.stack((u1_true_all, u2_true_all), axis=-1)
+    u_obs_all = np.stack((u1_obs_all, u2_obs_all), axis=-1)
+
+
+    # u_Energy = np.array((u_energy))
+    np.save("../../DA_Results/2DEuler/u_true_data_par.npy", u_true_all)
+    np.save("../../DA_Results/2DEuler/u_obs_data_par.npy", u_obs_all)
+    # np.save("../../DA_Results/2DEuler/u_energy_new.npy", u_Energy)
 
 

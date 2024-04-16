@@ -17,10 +17,10 @@ run model, get obseravation
 add observation noise N(0, sigma^2)
 """
 nsteps = 5
-xpoints = 81 # no of weather station
+obs_points = 81 # no of weather station
 
 N_obs = 1000
-model = Camsholm(100, nsteps, xpoints, noise_scale = 1.0, seed=1234567890, salt=True)
+model = Camsholm(100, nsteps, obs_points, noise_scale = 1.0, seed=1234567890, salt=True)
 model.setup()
 x, = SpatialCoordinate(model.mesh)
 
@@ -104,7 +104,7 @@ for i in range(N_obs):
     # truth.write(z)
     y_true = model.obs().dat.data[:]
     y_true_full[i,:] = y_true
-    y_noise = model.rg.normal(0.0, 0.5, xpoints)  
+    y_noise = model.rg.normal(0.0, 0.5, obs_points)  
 
     y_obs = y_true + y_noise   
     y_obs_full[i,:] = y_obs 

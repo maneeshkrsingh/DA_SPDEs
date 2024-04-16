@@ -1,4 +1,9 @@
 import firedrake as fd
+import os
+
+os.makedirs('../../DA_Results/2DEuler/', exist_ok=True)
+os.makedirs('../../DA_Results/2DEuler/checkpoint_files/', exist_ok=True)
+
 
 nensemble = [5]*20
 
