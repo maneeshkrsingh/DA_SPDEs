@@ -14,8 +14,8 @@ os.makedirs('../../DA_Results/', exist_ok=True)
 
 ## Load data
 
-# y_exact = np.load('../../DA_Results/y_true.npy')
-y = np.load('../../DA_Results/w_obs.npy') 
+# y_exact = np.load('../../DA_Results/LGmodel/y_true.npy')
+y = np.load('../../DA_Results/LGmodel/w_obs.npy') 
 N_obs = y.shape[0]
 ys = y.shape
 

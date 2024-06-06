@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from nudging.models.lineargaussian_model import LGModel
 import os
 
-os.makedirs('../../DA_Results/', exist_ok=True)
+os.makedirs('../../DA_Results/LGmodel/', exist_ok=True)
 
 """
 create some synthetic data/observation data at T_1 ---- T_Nobs
@@ -49,8 +49,8 @@ for i in range(N_obs):
     y_obs_full[i,:] = y_obs 
 
 print(y_noise, y_obs_full)
-np.save("../../DA_Results/w_true.npy", y_true_full)
-np.save("../../DA_Results/w_obs.npy", y_obs_full)
+np.save("../../DA_Results/LGmodel/w_true.npy", y_true_full)
+np.save("../../DA_Results/LGmodel/w_obs.npy", y_obs_full)
 
 
 print(y_true_full.shape)
