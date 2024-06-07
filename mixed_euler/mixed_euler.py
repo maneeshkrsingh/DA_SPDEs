@@ -10,7 +10,7 @@ truth_init = VTKFile("../../DA_Results/2DmixEuler/truth_init.pvd")
 
 n = 128
 Dt = 0.25
-nsteps = 100
+nsteps = 50
 noise_scale = 10.95
 r = 1.01
 
@@ -64,22 +64,27 @@ bc = fd.DirichletBC(V_mix.sub(1), fd.zero(), ("on_boundary"))
 qpsi0 = fd.Function(V_mix) # n time 
 q0,psi0  = qpsi0.subfunctions
 
+q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
+                    +0.3*cos(10*pi*x[0])*cos(4*pi*x[1]) +0.02*sin(2*pi*x[0])+ 0.02*sin(2*pi*x[1]))
+
+
 qpsi1 = fd.Function(V_mix) # n+1 time 
 qpsi1.assign(qpsi0)
 q1, psi1 = fd.split(qpsi1)
 
-q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
-                    +0.3*cos(10*pi*x[0])*cos(4*pi*x[1]) +0.02*sin(2*pi*x[0])+ 0.02*sin(2*pi*x[1]))
+# mid point formulation
+qh = 0.5*(q1+q0)
+psih = 0.5*(psi1+psi0)
 
 # test functions
 p, phi = fd.TestFunctions(V_mix)
 # upwinding terms
 n_F = fd.FacetNormal(mesh)
-un = 0.5 * (fd.dot(gradperp(psi1), n_F) + abs(fd.dot(gradperp(psi1), n_F)))
+un = 0.5 * (fd.dot(gradperp(psih), n_F) + abs(fd.dot(gradperp(psih), n_F))) # calculated at at mid pont
 
 # bilinear form 
-F = (q1-q0)*p*dx + Dt*(fd.dot(fd.grad(p), -q1*gradperp(psi1)) + p*r*q1+noise_scale*p*dU_3*Dt**2)*dx\
-        +Dt*(fd.dot(fd.jump(p), un("+")*q1("+") - un("-")*q1("-")))*dS\
+F = (q1-q0)*p*dx + Dt*(fd.dot(fd.grad(p), -qh*gradperp(psih)) + p*r*q1+noise_scale*p*dU_3*Dt**2)*dx\
+        +Dt*(fd.dot(fd.jump(p), un("+")*qh("+") - un("-")*qh("-")))*dS\
         +(fd.inner(fd.grad(psi1), fd.grad(phi)))*dx + psi1*phi*dx +  q0*phi*dx 
 
 
@@ -100,11 +105,14 @@ rg = fd.RandomGenerator(pcg)
 
 for step in range(nsteps):
     print('Step', step)
+    # setup for noise
     dW.assign(rg.normal(W_F, 0., 1.0))
     wsolver1.solve()
     wsolver2.solve()
     wsolver3.solve()
+    # solve 
     qphi_solver.solve()
+    # update
     qpsi0.assign(qpsi1)
     print('vorticity norm', fd.norm(q1), 'psi norm', fd.norm(psi1))
     truth_init.write(q1, psi1)
