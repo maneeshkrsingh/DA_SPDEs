@@ -11,7 +11,7 @@ truth_init = VTKFile("../../DA_Results/2DmixEuler/truth_init.pvd")
 n = 128
 Dt = 0.25
 nsteps = 100
-noise_scale = 100.95
+noise_scale = 10.95
 r = 1.01
 
 mesh = fd.UnitSquareMesh(n,n,quadrilateral=True)
@@ -30,7 +30,7 @@ sp = {"ksp_type": "cg", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"}
 Vcg = fd.FunctionSpace(mesh, "CG", 1)  # Streamfunctions
 Vdg = fd.FunctionSpace(mesh, "DQ", 1)  # PV space
 V_mix = fd.MixedFunctionSpace((Vdg, Vcg))
-#############################################################
+##################################   Matern field    ###########################
 W_F = fd.FunctionSpace(mesh, "DG", 0) # noise
 dW = fd.Function(W_F)
 dW_phi = fd.TestFunction(Vcg)
@@ -77,10 +77,10 @@ p, phi = fd.TestFunctions(V_mix)
 n_F = fd.FacetNormal(mesh)
 un = 0.5 * (fd.dot(gradperp(psi1), n_F) + abs(fd.dot(gradperp(psi1), n_F)))
 
-# bilinear form
-F = (q1-q0)*p*dx + Dt*(fd.dot(fd.grad(p), -q1*gradperp(psi1)) + p*r*q1+p*dU_2*Dt**2)*dx\
+# bilinear form 
+F = (q1-q0)*p*dx + Dt*(fd.dot(fd.grad(p), -q1*gradperp(psi1)) + p*r*q1+noise_scale*p*dU_3*Dt**2)*dx\
         +Dt*(fd.dot(fd.jump(p), un("+")*q1("+") - un("-")*q1("-")))*dS\
-        +(fd.inner(fd.grad(psi1), fd.grad(phi)))*dx + psi1*phi*dx +  q0*phi*dx # psi solvewr
+        +(fd.inner(fd.grad(psi1), fd.grad(phi)))*dx + psi1*phi*dx +  q0*phi*dx 
 
 
 # timestepping solver
@@ -89,7 +89,6 @@ qphi_prob = fd.NonlinearVariationalProblem(F, qpsi1, bcs=bc)
 qphi_solver = fd.NonlinearVariationalSolver(qphi_prob,solver_parameters=sp)
 
 # To access its output
-q0, psi0 = qpsi0.subfunctions
 q1, psi1 = qpsi1.subfunctions
 
 q1.rename("Vorticity")
@@ -103,9 +102,8 @@ for step in range(nsteps):
     print('Step', step)
     dW.assign(rg.normal(W_F, 0., 1.0))
     wsolver1.solve()
-    wsolver2.solve() # too smooth 
+    wsolver2.solve()
     wsolver3.solve()
-    print(fd.assemble(noise_scale*dU_2*Dt**2*dx))
     qphi_solver.solve()
     qpsi0.assign(qpsi1)
     print('vorticity norm', fd.norm(q1), 'psi norm', fd.norm(psi1))
