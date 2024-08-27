@@ -18,10 +18,10 @@ truth = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth.pvd"
 truth_init_ptb = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth_init_ptb.pvd")
 particle_init = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/particle_init.pvd")
 
-nensemble = [10]*10
-N_obs = 150
-N_init = 250
-n = 16
+nensemble = [1]*30
+N_obs = 2
+N_init = 200
+n = 32
 nsteps = 5
 dt = 1/20
 
@@ -29,7 +29,7 @@ dt = 1/20
 comm=fd.COMM_WORLD
 mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
 
-model = Euler_mixSD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=0.25, salt=False,  lambdas=True)
+model = Euler_mixSD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=1.05, salt=False,  lambdas=True)
 
 model.setup()
 mesh = model.mesh
@@ -55,7 +55,7 @@ for i in range(N_init):
     model.randomize(X0_truth)
     model.run(X0_truth, X0_truth)
     psi_VOM = model.obs()
-    if i % 20 == 0:
+    if i % 10 == 0:
         PETSc.Sys.Print('========Step=============', i)
         PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1), 'noise', fd.norm(model.dU_3))
     q,psi = model.qpsi1.subfunctions
@@ -97,14 +97,18 @@ for i in range(N_obs):
     psi_VOM_out = Function(model.VVOM_out)
     psi_VOM_out.interpolate(psi_VOM)
     psi_true = psi_VOM_out.dat.data_ro.copy()
-    
+    print('psi_true_squared', fd.assemble(psi_VOM_out**2*fd.dx))
     if comm.rank == 0:
-        PETSc.Sys.Print(psi_true)
+        #PETSc.Sys.Print('psi_true', psi_true)
         psi_true_all[i,:]= psi_true
-        PETSc.Sys.Print('psi_true', psi_true.max(), psi_true.min())
-        psi_noise = np.random.normal(0.0, 0.0025, (n+1)**2 ) # mean = 0, sd = 0.05
+        PETSc.Sys.Print('psi_true_ABS', psi_true.max(), psi_true.min())
+        psi_noise = np.random.normal(0.0, 0.025, (n+1)**2 ) # mean = 0, sd = 0.05
         PETSc.Sys.Print('Noise', psi_noise.max(), psi_noise.min())
-        psi_obs = psi_true + psi_noise
+        psi_max = np.abs(psi_true).max()
+        #print(psi_max)
+        psi_obs = psi_true + (1/psi_max)*psi_noise*psi_true
+        #print('psi_true', psi_true)
+        #print('psi_obs', psi_obs)
         psi_obs_all[i,:] = psi_obs
     np.save("../../DA_Results/2DEuler_mixed/psi_true_data.npy", psi_true_all)
     np.save("../../DA_Results/2DEuler_mixed/psi_obs_data.npy", psi_obs_all)
@@ -114,8 +118,13 @@ for i in range(N_obs):
 X_particle = model.allocate()
 X_particle[0].assign(X0_truth[0])
 # # #now do checkpointing
+#Vdg = fd.FunctionSpace(mesh, "DQ", 1)  # PV space
+
+Vcg = fd.FunctionSpace(mesh, "CG", 1)  # Streamfunctions
 Vdg = fd.FunctionSpace(mesh, "DQ", 1)  # PV space
-f_chp = Function(Vdg, name="f_chp")
+V_mix = fd.MixedFunctionSpace((Vdg, Vcg))
+psi_chp = Function(Vcg, name="psi_chp")
+pv_chp = Function(Vdg, name="pv_chp")
 #dump data 
 ndump = 5
 p_dump = 0
@@ -133,19 +142,21 @@ with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.
         if i % ndump == 0:
             PETSc.Sys.Print('===========checkpoint particle============', p_dump , 'init')
             PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1))
-            f_chp.interpolate(psi)
+            psi_chp.interpolate(psi)
+            pv_chp.interpolate(q)
 
             particle_init.write(q, psi)
-            afile.save_function(f_chp, idx=p_dump)
-            PETSc.Sys.Print(fd.norm(f_chp))
+            afile.save_function(psi_chp, idx=p_dump)
+            afile.save_function(pv_chp, idx=p_dump)
+            #PETSc.Sys.Print(p_dump, fd.norm(f_chp))
             psi_particle_VOM = model.obs()
             psi_particle_VOM_out = Function(model.VVOM_out)
             psi_particle_VOM_out.interpolate(psi_particle_VOM)
             psi_particle = psi_particle_VOM_out.dat.data_ro.copy()# #To store streamfunc values 
-
+            #print('particle_INIT_squared', fd.assemble(psi_particle_VOM_out**2*fd.dx))
 
             if comm.rank == 0:
                 psi_particle_init[p_dump,:] = psi_particle
-                print(psi_particle_init.max(), psi_particle_init.min())
+                #print('particle_INIT', psi_particle_init**2)
             p_dump += 1
     np.save("../../DA_Results/2DEuler_mixed/psi_particle_init.npy", psi_particle_init)
