@@ -71,10 +71,12 @@ for k in range(N_obs):
 
 
 # to store ensembles for further nudging
-Vcg = FunctionSpace(model.mesh, "CG", 1)  # Streamfunctions
-Vdg = FunctionSpace(model.mesh, "DQ", 1)  # PV space
+Vcg = FunctionSpace(mesh, "CG", 1)  # Streamfunctions
+Vdg = FunctionSpace(mesh, "DQ", 1)  # PV space
 psi_e = Function(Vcg, name="psi_ensemble") # checkpoint streamfunc
 q_e = Function(Vdg, name="pv_ensemble")   # checkpoint vorticity
+
+
 
 with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_temp.h5", 
                        'w') as afile:
@@ -82,7 +84,7 @@ with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_te
     for ilocal in range(nensemble[jtfilter.ensemble_rank]):
         iglobal = jtfilter.layout.transform_index(ilocal, itype='l', rtype='g')
 
-        q,psi = jtfilter.ensemble[ilocal][0].subfunctions
+        q,psi = jtfilter.ensemble[ilocal][0].split()
         psi_e.interpolate(psi)
         afile.save_function(psi_e, idx=iglobal)
         # q_e.interpolate(q)
