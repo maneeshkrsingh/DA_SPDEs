@@ -18,7 +18,7 @@ truth = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth.pvd"
 truth_init_ptb = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth_init_ptb.pvd")
 particle_init = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/particle_init.pvd")
 
-nensemble = [3]*30
+nensemble = [2]*30
 N_obs = 10
 N_init = 250
 n = 32
@@ -27,11 +27,11 @@ dt = 1/20
 
 
 comm=fd.COMM_WORLD
-mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
+#mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
 
-model = Euler_mixSD(n, nsteps=nsteps, mesh = mesh, dt = dt, noise_scale=1.05, salt=False,  lambdas=True)
+model = Euler_mixSD(n, nsteps=nsteps,  dt = dt, noise_scale=1.05, salt=False,  lambdas=True)
 
-model.setup()
+model.setup(comm=fd.COMM_WORLD)
 mesh = model.mesh
 x = SpatialCoordinate(mesh)
 ############################# initilisation ############
@@ -81,13 +81,13 @@ Vdg = fd.FunctionSpace(mesh, "DQ", 1)  # PV space
 psi_chp = Function(Vcg, name="psi_chp") # checkpoint streamfunc
 pv_chp = Function(Vdg, name="pv_chp")   # checkpoint vorticity
 
-ndump = 100  # dump data
+ndump = 10  # dump data
 p_dump = 0
 
 psi_particle_init = np.zeros((sum(nensemble), np.size(psi_true)))
-with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.h5", 
+with fd.CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_init.h5", 
                        'w') as afile:
-    afile.save_mesh(mesh)
+    #afile.save_mesh(mesh)
     for i in range(sum(nensemble)+1):
         if i < (sum(nensemble)):
             print("Generating ensemble member", i)
@@ -105,9 +105,9 @@ with fd.CheckpointFile("../../DA_Results/2DEuler/checkpoint_files/ensemble_init.
         pv_chp.interpolate(q)
 
         particle_init.write(q, psi)
-        afile.save_function(psi_chp, idx=p_dump)
-        afile.save_function(pv_chp, idx=p_dump)
-
+        afile.save_function(psi_chp, idx=i)
+        afile.save_function(pv_chp, idx=i)
+        #print('iglobal', i, norm(psi_chp))
         psi_particle_VOM = model.obs()
         psi_particle_VOM_out = Function(model.VVOM_out)
         psi_particle_VOM_out.interpolate(psi_particle_VOM)
