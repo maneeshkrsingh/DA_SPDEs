@@ -20,20 +20,20 @@ psi_exact = np.load('../../DA_Results/2DEuler_mixed/psi_true_data.npy')
 psi_vel = np.load('../../DA_Results/2DEuler_mixed/psi_obs_data.npy') 
 
 nensemble = [2]*30
-n = 16
+n = 32
 nsteps = 5
 dt = 1/20
 
 model = Euler_mixSD(n, nsteps=nsteps,  dt = dt,  noise_scale=1.05, salt=False,  lambdas=True)
 
 
-# nudging = False
-# jtfilter = jittertemp_filter(n_jitt=0, delta=0.15,
-#                              verbose=2, MALA=False,
-#                              visualise_tape=False, nudging=nudging, sigma=0.001)
-
 nudging = False
-jtfilter = bootstrap_filter(verbose=2)
+jtfilter = jittertemp_filter(n_jitt=4, delta=0.15,
+                             verbose=2, MALA=False,
+                             visualise_tape=False, nudging=nudging, sigma=0.001)
+
+# nudging = False
+# jtfilter = bootstrap_filter(verbose=2)
 
 jtfilter.setup(nensemble=nensemble, model=model, residual=False)
 
@@ -69,13 +69,52 @@ N_obs = 10
 # VVOM Function
 psi_VOM = Function(model.VVOM) 
 
+psi_e_list = []
+
+for m in range(psi_vel.shape[1]):        
+    psi_e_shared = SharedArray(partition=nensemble, 
+                                 comm=jtfilter.subcommunicators.ensemble_comm)
+    psi_e_list.append(psi_e_shared)
+
+    
+psi_shape = psi_vel.shape
+if COMM_WORLD.rank == 0:
+    psi_e = np.zeros((np.sum(nensemble), psi_shape[0], psi_shape[1]))
+
 
 # do assimiliation step
 for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
     psi_VOM.dat.data[:] = psi_vel[k,:]
     # assimilation step
-    jtfilter.assimilation_step(psi_VOM, log_likelihood)
+    jtfilter.assimilation_step(psi_VOM, log_likelihood, ess_tol=0.8)
+
+    # # garbage cleanup --not sure if improved speed
+    PETSc.garbage_cleanup(PETSc.COMM_SELF)
+    petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
+    petsc4py.PETSc.garbage_cleanup(model.mesh.comm)
+    gc.collect()
+
+    # to store data
+    for i in range(nensemble[jtfilter.ensemble_rank]):
+        obsdata = model.obs().dat.data[:]
+        for m in range(psi_vel.shape[1]):
+            psi_e_list[m].dlocal[i] = obsdata[m]
+
+
+    for m in range(psi_vel.shape[1]):
+        psi_e_list[m].synchronise()
+        if COMM_WORLD.rank == 0:
+            psi_e[:, k, m] = psi_e_list[m].data()
+
+
+if COMM_WORLD.rank == 0:
+    print(psi_e.shape)
+    if not nudging:
+        np.save("../../DA_Results/2DEuler_mixed/mcmcwt_assimilated_Vorticity_ensemble.npy", psi_e)
+    if nudging:
+        np.save("../../DA_Results/2DEuler_mixed/nudge_assimilated_Vorticity_ensemble.npy", psi_e)
+
 
 
 # # to store ensembles for further nudging
