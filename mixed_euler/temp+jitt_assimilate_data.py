@@ -19,12 +19,12 @@ os.makedirs('../../DA_Results/2DEuler_mixed/checkpoint_files/', exist_ok=True)
 psi_exact = np.load('../../DA_Results/2DEuler_mixed/psi_true_data.npy')
 psi_vel = np.load('../../DA_Results/2DEuler_mixed/psi_obs_data.npy') 
 
-nensemble = [1]*30
-n = 8
+nensemble = [2]*30
+n = 16
 nsteps = 5
 dt = 1/20
 
-model = Euler_mixSD(n, nsteps=nsteps, mesh = False, dt = dt,  noise_scale=1.05, salt=False,  lambdas=True)
+model = Euler_mixSD(n, nsteps=nsteps,  dt = dt,  noise_scale=1.05, salt=False,  lambdas=True)
 
 
 # nudging = False
@@ -40,6 +40,12 @@ jtfilter.setup(nensemble=nensemble, model=model, residual=False)
 with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_init.h5", 
                        'r', comm=jtfilter.subcommunicators.comm) as afile:
     mesh = afile.load_mesh("mesh2d_per")
+
+
+
+with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_init.h5", 
+                       'r', comm=jtfilter.subcommunicators.comm) as afile:
+    #mesh = afile.load_mesh("mesh2d_per")
     for ilocal in range(nensemble[jtfilter.ensemble_rank]):
         iglobal = jtfilter.layout.transform_index(ilocal, itype='l', rtype='g')
 
@@ -47,11 +53,13 @@ with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_in
         pv_chp = afile.load_function(mesh, "pv_chp", idx = iglobal) # checkpoint vorticity
 
         q,psi = jtfilter.ensemble[ilocal][0].split()
-        print(norm(q))
+        #print(norm(q))
         q.interpolate(pv_chp)
         psi.interpolate(psi_chp)
 
 SD = 0.01
+
+
 
 def log_likelihood(y, Y):
     ll = (y-Y)**2/SD**2/2*dx
@@ -70,24 +78,19 @@ for k in range(N_obs):
     jtfilter.assimilation_step(psi_VOM, log_likelihood)
 
 
-# to store ensembles for further nudging
-Vcg = FunctionSpace(mesh, "CG", 1)  # Streamfunctions
-Vdg = FunctionSpace(mesh, "DQ", 1)  # PV space
+# # to store ensembles for further nudging
+Vcg = FunctionSpace(model.mesh, "CG", 1)  # Streamfunctions
+Vdg = FunctionSpace(model.mesh, "DQ", 1)  # PV space
 psi_e = Function(Vcg, name="psi_ensemble") # checkpoint streamfunc
 q_e = Function(Vdg, name="pv_ensemble")   # checkpoint vorticity
 
-
-
-with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_temp.h5", 
-                       'w') as afile:
-    # afile.save_mesh(mesh)
-    for ilocal in range(nensemble[jtfilter.ensemble_rank]):
-        iglobal = jtfilter.layout.transform_index(ilocal, itype='l', rtype='g')
-
+erank = jtfilter.ensemble_rank
+filename = f"../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_temp{erank}.h5"
+with CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
+    for ilocal in range(nensemble[erank]):
         q,psi = jtfilter.ensemble[ilocal][0].split()
         psi_e.interpolate(psi)
-        afile.save_function(psi_e, idx=iglobal)
-        # q_e.interpolate(q)
-        # afile.save_function(q_e, idx=iglobal)
-    
-
+        afile.save_function(psi_e, idx=ilocal)
+        q_e.interpolate(q)
+        afile.save_function(q_e, idx=ilocal)
+        print('Rank', erank, 'ilocal', ilocal,  norm(q_e))
