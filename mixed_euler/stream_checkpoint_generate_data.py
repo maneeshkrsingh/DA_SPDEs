@@ -18,18 +18,18 @@ truth = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth.pvd"
 truth_init_ptb = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth_init_ptb.pvd")
 particle_init = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/particle_init.pvd")
 
-nensemble = [2]*30
-N_obs = 10
+nensemble = [1]*30
+N_obs = 100
 N_init = 250
-n = 32
+n = 16
 nsteps = 5
-dt = 1/20
+dt = 1/40
 
 
 comm=fd.COMM_WORLD
 #mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
 
-model = Euler_mixSD(n, nsteps=nsteps,  dt = dt, noise_scale=1.05, salt=False,  lambdas=True)
+model = Euler_mixSD(n, nsteps=nsteps,  dt = dt, noise_scale=1.25, salt=False,  lambdas=True)
 
 model.setup(comm=fd.COMM_WORLD)
 mesh = model.mesh
@@ -81,7 +81,7 @@ Vdg = fd.FunctionSpace(mesh, "DQ", 1)  # PV space
 psi_chp = Function(Vcg, name="psi_chp") # checkpoint streamfunc
 pv_chp = Function(Vdg, name="pv_chp")   # checkpoint vorticity
 
-ndump = 10  # dump data
+ndump = 20  # dump data
 p_dump = 0
 
 psi_particle_init = np.zeros((sum(nensemble), np.size(psi_true)))
@@ -144,7 +144,7 @@ for i in range(N_obs):
     if comm.rank == 0:
         psi_true_all[i,:]= psi_true
         PETSc.Sys.Print('psi_true_ABS', psi_true.max(), psi_true.min())
-        psi_noise = np.random.normal(0.0, 0.01, (n+1)**2 ) # mean = 0, sd = 0.05
+        psi_noise = np.random.normal(0.0, 0.001, (int(n/2+1)**2 ) )# mean = 0, sd = 0.05
         PETSc.Sys.Print('Noise', psi_noise.max(), psi_noise.min())
         psi_max = np.abs(psi_true).max()
         psi_obs = psi_true + (1/psi_max)*psi_noise*psi_true # To get similar boundary values as truth 
