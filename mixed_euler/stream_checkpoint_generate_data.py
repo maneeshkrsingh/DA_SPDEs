@@ -50,15 +50,21 @@ psi_true = psi_VOM_out.dat.data_ro.copy()
 # To store inilization of  vorticity compoenents
 psi_init = np.zeros((np.size(psi_true)))
 
+# To check the energy functional
+Vu = VectorFunctionSpace(mesh, "DQ", 0)  # DQ elements for velocity
+v = Function(Vu, name="gradperp(stream function)")
+u_energy = []
 ### To forward run for creating initlization  for truth and particles
 for i in range(N_init):
     model.randomize(X0_truth)
     model.run(X0_truth, X0_truth)
-    psi_VOM = model.obs()
+    # psi_VOM = model.obs()
     if i % 10 == 0:
         PETSc.Sys.Print('========Step=============', i)
         PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1), 'noise', fd.norm(model.dU_3))
     q,psi = model.qpsi1.subfunctions
+    v.project(gradperp(model.qpsi0[1]))
+    u_energy.append(0.5*norm(v))
     dU = model.dU_3
     q.rename("Vorticity")
     psi.rename("stream function")
@@ -69,6 +75,8 @@ for i in range(N_init):
     psi_init_VOM_out = Function(model.VVOM_out)
     psi_init_VOM_out.interpolate(psi_init_VOM)
     psinit = psi_init_VOM_out.dat.data_ro.copy()
+    if comm.rank == 0:
+        np.save("../../DA_Results/2DEuler_mixed/u_energy.npy", u_energy)
     if i == N_init-1:
         if comm.rank == 0:
             ps_init = psinit
