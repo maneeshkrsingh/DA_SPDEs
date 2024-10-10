@@ -23,7 +23,7 @@ os.makedirs('../../DA_Results/2DEuler_mixed/checkpoint_files/', exist_ok=True)
 psi_exact = np.load('../../DA_Results/2DEuler_mixed/psi_true_data.npy')
 psi_vel = np.load('../../DA_Results/2DEuler_mixed/psi_obs_data.npy') 
 
-nensemble = [1]*30
+nensemble = [1]*20
 n = 16
 nsteps = 5
 dt = 1/40
@@ -55,9 +55,9 @@ with CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_in
 
         psi_chp = afile.load_function(mesh, "psi_chp", idx = iglobal) # checkpoint stream
         pv_chp = afile.load_function(mesh, "pv_chp", idx = iglobal) # checkpoint vorticity
-        Print('==============', psi_chp.function_space())
+        #Print('==============', psi_chp.function_space())
         q,psi = jtfilter.ensemble[ilocal][0].split()
-        Print('==============', psi.function_space())
+        #Print('==============', psi.function_space())
         #print(norm(q))
         q.interpolate(pv_chp)
         psi.interpolate(psi_chp)
@@ -87,36 +87,10 @@ if COMM_WORLD.rank == 0:
     psi_e = np.zeros((np.sum(nensemble), psi_shape[0], psi_shape[1]))
 
 
-# add sample class 
-class samples(base_diagnostic):
-    def compute_diagnostic(self, particle):
-        model.qpsi0.assign(particle[0])
-        #Print(model.obs().dat.data[0])
-        return model.obs().dat.data[0]
-
-tempjittresample = samples(Stage.AFTER_ASSIMILATION_STEP,
-                            jtfilter.subcommunicators,
-                            nensemble)
-# nudgingsamples = samples(Stage.AFTER_NUDGING,
-#                          jtfilter.subcommunicators,
-#                          nensemble)
-# nolambdasamples = samples(Stage.WITHOUT_LAMBDAS,
-#                           jtfilter.subcommunicators,
-#                           nensemble)
-
-
-tmeperingsamples = samples(Stage.AFTER_TEMPER_RESAMPLE,
-                         jtfilter.subcommunicators,
-                         nensemble)
-
-# tempjittsample = samples(Stage.AFTER_JITTERING,
-#                          jtfilter.subcommunicators,
-#                          nensemble)
 
 
 
-diagnostics = [tmeperingsamples,
-               tempjittresample]
+diagnostics = []
 
 # do assimiliation step
 for k in range(N_obs):
@@ -145,26 +119,19 @@ for k in range(N_obs):
         if COMM_WORLD.rank == 0:
             psi_e[:, k, m] = psi_e_list[m].data()
 
-    temp_count.append(jtfilter.temper_count)
-    Print('temp_count', np.array(temp_count))
+    # temp_count.append(jtfilter.temper_count)
+    # Print('temp_count', np.array(temp_count))
 
-if jtfilter.subcommunicators.global_comm.rank == 0:
-    #before, descriptors = nolambdasamples.get_archive()
-    aftertemper, descriptors = tmeperingsamples.get_archive()
-    resampled_final, descriptors = tempjittresample.get_archive()
 
-    #np.save("before", before)
-    np.save("aftertemper", aftertemper)
-    np.save("resampled_final", resampled_final)
 
-if COMM_WORLD.rank == 0:
-    # print('temp_count', np.array(temp_count))
-    np.save("../../DA_Results/2DEuler_mixed/temp_cunt.npy", np.array(temp_count))
-    print(psi_e.shape)
-    if not nudging:
-        np.save("../../DA_Results/2DEuler_mixed/tempjitt_assimilated_Vorticity_ensemble.npy", psi_e)
-    if nudging:
-        np.save("../../DA_Results/2DEuler_mixed/nudge_assimilated_Vorticity_ensemble.npy", psi_e)
+# if COMM_WORLD.rank == 0:
+#     # print('temp_count', np.array(temp_count))
+#     np.save("../../DA_Results/2DEuler_mixed/temp_cunt.npy", np.array(temp_count))
+#     print(psi_e.shape)
+#     if not nudging:
+#         np.save("../../DA_Results/2DEuler_mixed/tempjitt_assimilated_Vorticity_ensemble.npy", psi_e)
+#     if nudging:
+#         np.save("../../DA_Results/2DEuler_mixed/nudge_assimilated_Vorticity_ensemble.npy", psi_e)
 
 
 
@@ -183,4 +150,4 @@ with CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile
         afile.save_function(psi_e, idx=ilocal)
         q_e.interpolate(q)
         afile.save_function(q_e, idx=ilocal)
-        print('Rank', erank, 'ilocal', ilocal,  norm(q_e))
+        #print('Rank', erank, 'ilocal', ilocal,  norm(q_e))

@@ -20,7 +20,7 @@ Do assimilation step for tempering and jittering steps
 psi_exact = np.load('../../DA_Results/2DEuler_mixed/psi_true_data.npy')
 psi_vel = np.load('../../DA_Results/2DEuler_mixed/psi_obs_data.npy') 
 
-nensemble = [1]*30
+nensemble = [1]*20
 n = 16
 nsteps = 5
 dt = 1/40
@@ -53,7 +53,7 @@ with CheckpointFile(filename, 'r', comm=jtfilter.subcommunicators.comm) as afile
         q,psi = jtfilter.ensemble[ilocal][0].split()
         q.interpolate(pv_chp)
         psi.interpolate(psi_chp)
-        Print('Rank', erank, 'ilocal', ilocal, norm(q))
+        #Print('Rank', erank, 'ilocal', ilocal, norm(q))
 
 SD = 0.001
 
@@ -64,7 +64,7 @@ def log_likelihood(y, Y):
 
 temp_count = []
 
-N_obs = 100
+N_obs = 5
 # VVOM Function
 psi_VOM = Function(model.VVOM) 
 # prepare shared arrays for data
@@ -89,26 +89,8 @@ tao_params = {
     "tao_gttol": 1.0e-5,
 }
 
-# add sample class 
-class samples(base_diagnostic):
-    def compute_diagnostic(self, particle):
-        model.qpsi0.assign(particle[0])
-        return model.obs().dat.data[0]
 
-resamplingsamples = samples(Stage.AFTER_ASSIMILATION_STEP,
-                            jtfilter.subcommunicators,
-                            nensemble)
-nudgingsamples = samples(Stage.AFTER_NUDGING,
-                         jtfilter.subcommunicators,
-                         nensemble)
-nolambdasamples = samples(Stage.WITHOUT_LAMBDAS,
-                          jtfilter.subcommunicators,
-                          nensemble)
-
-
-diagnostics = [nudgingsamples,
-               resamplingsamples,
-               nolambdasamples]
+diagnostics = []
 
 # do assimiliation step
 for k in range(N_obs):
@@ -124,11 +106,6 @@ for k in range(N_obs):
                                 tao_params=tao_params)
 
 
-    # # garbage cleanup --not sure if improved speed
-    PETSc.garbage_cleanup(PETSc.COMM_SELF)
-    petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
-    petsc4py.PETSc.garbage_cleanup(model.mesh.comm)
-    gc.collect()
 
     # to store data
     for i in range(nensemble[jtfilter.ensemble_rank]):
@@ -142,25 +119,16 @@ for k in range(N_obs):
         if COMM_WORLD.rank == 0:
             psi_e[:, k, m] = psi_e_list[m].data()
 
-    temp_count.append(jtfilter.temper_count)
-
-    Print('temp_count', np.array(temp_count))
-
-if jtfilter.subcommunicators.global_comm.rank == 0:
-    before, descriptors = nolambdasamples.get_archive()
-    after, descriptors = nudgingsamples.get_archive()
-    resampled, descriptors = resamplingsamples.get_archive()
-
-    np.save("before", before)
-    np.save("after", after)
-    np.save("resampled", resampled)
+    # temp_count.append(jtfilter.temper_count)
+    # Print('temp_count', np.array(temp_count))
 
 
-if COMM_WORLD.rank == 0:
-    # print('temp_count', np.array(temp_count))
-    print(psi_e.shape)
-    np.save("../../DA_Results/2DEuler_mixed/nudge_temp_count.npy", np.array(temp_count))
-    if not nudging:
-        np.save("../../DA_Results/2DEuler_mixed/mcmcwt_assimilated_Vorticity_ensemble.npy", psi_e)
-    if nudging:
-        np.save("../../DA_Results/2DEuler_mixed/nudge_assimilated_Vorticity_ensemble.npy", psi_e)
+
+# if COMM_WORLD.rank == 0:
+#     # print('temp_count', np.array(temp_count))
+#     print(psi_e.shape)
+#     np.save("../../DA_Results/2DEuler_mixed/nudge_temp_count.npy", np.array(temp_count))
+#     if not nudging:
+#         np.save("../../DA_Results/2DEuler_mixed/mcmcwt_assimilated_Vorticity_ensemble.npy", psi_e)
+#     if nudging:
+#         np.save("../../DA_Results/2DEuler_mixed/nudge_assimilated_Vorticity_ensemble.npy", psi_e)
