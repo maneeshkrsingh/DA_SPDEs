@@ -88,17 +88,6 @@ if COMM_WORLD.rank == 0:
 
 
 
-tao_params = {
-    "tao_type": "lmvm",
-    "tao_monitor": None,
-    "tao_converged_reason": None,
-    "tao_gatol": 1.0e-2,
-    "tao_grtol": 1.0e-4,
-    "tao_gttol": 1.0e-4,
-}
-
-# diagnostics = []
-
 
 # # results in a diagnostic
 class samples(base_diagnostic):
@@ -110,9 +99,6 @@ class samples(base_diagnostic):
 resamplingsamples = samples(Stage.AFTER_ASSIMILATION_STEP,
                             jtfilter.subcommunicators,
                             nensemble)
-# nudgingsamples = samples(Stage.AFTER_NUDGING,
-#                          jtfilter.subcommunicators,
-#                          nensemble)
 nolambdasamples = samples(Stage.WITHOUT_LAMBDAS,
                           jtfilter.subcommunicators,
                           nensemble)
@@ -126,10 +112,11 @@ jitteringsamples = samples(Stage.AFTER_JITTERING,
                             jtfilter.subcommunicators,
                             nensemble)
 
-diagnostics = [resamplingsamples,
-               temperingsamples,
-               jitteringsamples]
+# diagnostics = [resamplingsamples,
+#                temperingsamples,
+#                jitteringsamples]
 
+diagnostics = []
 
 # do assimiliation step
 for k in range(N_obs):
@@ -138,9 +125,7 @@ for k in range(N_obs):
     # assimilation step
     jtfilter.assimilation_step(psi_VOM, log_likelihood,
                                diagnostics=diagnostics,
-                                ess_tol=-0.7,
-                                taylor_test=False,
-                                tao_params=tao_params)
+                                ess_tol=0.8)
 
     # # garbage cleanup --not sure if improved speed
     PETSc.garbage_cleanup(PETSc.COMM_SELF)
