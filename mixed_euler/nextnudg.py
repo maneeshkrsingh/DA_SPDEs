@@ -76,15 +76,36 @@ psi_shape = psi_vel.shape
 if COMM_WORLD.rank == 0:
     psi_e = np.zeros((np.sum(nensemble), N_obs, psi_shape[1]))
 
-tao_params = {
-    "tao_type": "lmvm",
-    "tao_monitor": None,
-    "tao_converged_reason": None,
-    "tao_gatol": 1.0e-2,
-    "tao_grtol": 1.0e-4,
-    "tao_gttol": 1.0e-4,
-}
-
+lis_tao_params = []
+for step in range(nsteps):
+    if step in (0, 1):
+        tao_params = {
+            "tao_type": "lmvm",
+            "tao_monitor": None,
+            "tao_converged_reason": None,
+            "tao_gatol": 1.0e-2,
+            "tao_grtol": 1.0e-3,
+            "tao_gttol": 1.0e-3,
+            }
+    elif step == 2:
+        tao_params = {
+            "tao_type": "lmvm",
+            "tao_monitor": None,
+            "tao_converged_reason": None,
+            "tao_gatol": 1.0e-2,
+            "tao_grtol": 1.0e-2,
+            "tao_gttol": 1.0e-2,
+            }
+    else:
+        tao_params = {
+            "tao_type": "lmvm",
+            "tao_monitor": None,
+            "tao_converged_reason": None,
+            "tao_gatol": 1.0e-1,
+            "tao_grtol": 1.0e-2,
+            "tao_gttol": 1.0e-2,
+            }
+    lis_tao_params.append(tao_params)
 
 diagnostics = []
 
@@ -97,7 +118,7 @@ for k in range(N_obs):
                                diagnostics=diagnostics,
                                 ess_tol=0.8,
                                 taylor_test=False,
-                                tao_params=tao_params)
+                                tao_params=lis_tao_params)
     # # garbage cleanup --not sure if improved speed
     PETSc.garbage_cleanup(PETSc.COMM_SELF)
     petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
