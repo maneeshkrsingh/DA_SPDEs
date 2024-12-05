@@ -1,12 +1,9 @@
 from firedrake import *
 from nudging import *
 import numpy as np
-import gc
-import petsc4py
 from firedrake.petsc import PETSc
-
-from nudging import  base_diagnostic, Stage
-
+import petsc4py
+import gc
 from nudging.models.stochastic_mix_euler import Euler_mixSD
 import os
 
@@ -20,8 +17,8 @@ Do assimilation step for tempering and jittering steps
 psi_exact = np.load('../../DA_Results/2DEuler_mixed/psi_true_data.npy')
 psi_vel = np.load('../../DA_Results/2DEuler_mixed/psi_obs_data.npy') 
 
-nensemble = [1]*20
-n = 16
+nensemble = [2]*25
+n = 32
 nsteps = 5
 dt = 1/40
 
@@ -33,8 +30,7 @@ jtfilter = jittertemp_filter(n_jitt=4, delta=0.15,
                              verbose=2, MALA=False,
                              visualise_tape=False, nudging=nudging, sigma=0.001)
 
-# nudging = False
-# jtfilter = bootstrap_filter(verbose=2)
+
 
 jtfilter.setup(nensemble=nensemble, model=model, residual=False)
 
@@ -64,7 +60,7 @@ def log_likelihood(y, Y):
 
 temp_count = []
 
-N_obs = 5
+N_obs = 2
 # VVOM Function
 psi_VOM = Function(model.VVOM) 
 # prepare shared arrays for data
@@ -85,8 +81,8 @@ tao_params = {
     "tao_monitor": None,
     "tao_converged_reason": None,
     "tao_gatol": 1.0e-2,
-    "tao_grtol": 1.0e-5,
-    "tao_gttol": 1.0e-5,
+    "tao_grtol": 1.0e-4,
+    "tao_gttol": 1.0e-4,
 }
 
 
@@ -96,16 +92,17 @@ diagnostics = []
 for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
     psi_VOM.dat.data[:] = psi_vel[k,:]
-    #PETSc.Sys.Print('true', assemble(pv_VOM*dx))
-    # assimilation step
-    #jtfilter.assimilation_step(psi_VOM, log_likelihood)
+
     jtfilter.assimilation_step(psi_VOM, log_likelihood,
                                diagnostics=diagnostics,
                                 ess_tol=0.8,
                                 taylor_test=False,
                                 tao_params=tao_params)
-
-
+    # # garbage cleanup --not sure if improved speed
+    PETSc.garbage_cleanup(PETSc.COMM_SELF)
+    petsc4py.PETSc.garbage_cleanup(model.mesh._comm)
+    petsc4py.PETSc.garbage_cleanup(model.mesh.comm)
+    gc.collect()
 
     # to store data
     for i in range(nensemble[jtfilter.ensemble_rank]):
@@ -126,9 +123,26 @@ for k in range(N_obs):
 
 # if COMM_WORLD.rank == 0:
 #     # print('temp_count', np.array(temp_count))
+#     np.save("../../DA_Results/2DEuler_mixed/temp_cunt.npy", np.array(temp_count))
 #     print(psi_e.shape)
-#     np.save("../../DA_Results/2DEuler_mixed/nudge_temp_count.npy", np.array(temp_count))
 #     if not nudging:
-#         np.save("../../DA_Results/2DEuler_mixed/mcmcwt_assimilated_Vorticity_ensemble.npy", psi_e)
+#         np.save("../../DA_Results/2DEuler_mixed/tempjitt_assimilated_Vorticity_ensemble.npy", psi_e)
 #     if nudging:
 #         np.save("../../DA_Results/2DEuler_mixed/nudge_assimilated_Vorticity_ensemble.npy", psi_e)
+
+# # # finally to store ensembles for further nudging
+# Vcg = FunctionSpace(model.mesh, "CG", 1)  # Streamfunctions
+# Vdg = FunctionSpace(model.mesh, "DQ", 1)  # PV space
+# psi_e = Function(Vcg, name="psi_ensemble") # checkpoint streamfunc
+# q_e = Function(Vdg, name="pv_ensemble")   # checkpoint vorticity
+
+# erank = jtfilter.ensemble_rank
+# filename = f"../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_50_nudge{erank}.h5"
+# with CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
+#     for ilocal in range(nensemble[erank]):
+#         q,psi = jtfilter.ensemble[ilocal][0].split()
+#         psi_e.interpolate(psi)
+#         afile.save_function(psi_e, idx=ilocal)
+#         q_e.interpolate(q)
+#         afile.save_function(q_e, idx=ilocal)
+        #print('Rank', erank, 'ilocal', ilocal,  norm(q_e))
