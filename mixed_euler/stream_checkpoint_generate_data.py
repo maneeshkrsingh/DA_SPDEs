@@ -18,10 +18,10 @@ truth = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth.pvd"
 truth_init_ptb = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth_init_ptb.pvd")
 particle_init = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/particle_init.pvd")
 
-nensemble = [1]*30
-N_obs = 100
+nensemble = [1]*50
+N_obs = 250
 N_init = 250
-n = 16
+n = 32
 nsteps = 5
 dt = 1/40
 

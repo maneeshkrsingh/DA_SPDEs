@@ -23,16 +23,16 @@ os.makedirs('../../DA_Results/2DEuler_mixed/checkpoint_files/', exist_ok=True)
 psi_exact = np.load('../../DA_Results/2DEuler_mixed/psi_true_data.npy')
 psi_vel = np.load('../../DA_Results/2DEuler_mixed/psi_obs_data.npy') 
 
-nensemble = [1]*20
-n = 16
+nensemble = [2]*25
+n = 32
 nsteps = 5
 dt = 1/40
 
 model = Euler_mixSD(n, nsteps=nsteps,  dt = dt,  noise_scale=1.25, salt=False,  lambdas=True)
 
 
-nudging = False
-jtfilter = jittertemp_filter(n_jitt=4, delta=0.15,
+nudging = True
+jtfilter = jittertemp_filter(n_jitt=5, delta=0.15,
                              verbose=2, MALA=False,
                              visualise_tape=False, nudging=nudging, sigma=0.001)
 
@@ -70,7 +70,7 @@ def log_likelihood(y, Y):
     ll = (y-Y)**2/SD**2/2*dx
     return ll
 
-N_obs = 10
+N_obs = 1
 # VVOM Function
 psi_VOM = Function(model.VVOM) 
 
@@ -88,18 +88,59 @@ if COMM_WORLD.rank == 0:
 
 
 
+tao_params = {
+    "tao_type": "lmvm",
+    "tao_monitor": None,
+    "tao_converged_reason": None,
+    "tao_gatol": 1.0e-2,
+    "tao_grtol": 1.0e-4,
+    "tao_gttol": 1.0e-4,
+}
+
+# diagnostics = []
 
 
-diagnostics = []
+# # results in a diagnostic
+class samples(base_diagnostic):
+    def compute_diagnostic(self, particle):
+        model.qpsi0.assign(particle[0])
+        return model.obs().dat.data[0]
+
+
+resamplingsamples = samples(Stage.AFTER_ASSIMILATION_STEP,
+                            jtfilter.subcommunicators,
+                            nensemble)
+# nudgingsamples = samples(Stage.AFTER_NUDGING,
+#                          jtfilter.subcommunicators,
+#                          nensemble)
+nolambdasamples = samples(Stage.WITHOUT_LAMBDAS,
+                          jtfilter.subcommunicators,
+                          nensemble)
+
+temperingsamples = samples(Stage.AFTER_TEMPER_RESAMPLE,
+                            jtfilter.subcommunicators,
+                            nensemble)
+
+
+jitteringsamples = samples(Stage.AFTER_JITTERING,
+                            jtfilter.subcommunicators,
+                            nensemble)
+
+diagnostics = [resamplingsamples,
+               temperingsamples,
+               jitteringsamples]
+
 
 # do assimiliation step
 for k in range(N_obs):
     PETSc.Sys.Print("Step", k)
     psi_VOM.dat.data[:] = psi_vel[k,:]
     # assimilation step
-    jtfilter.assimilation_step(psi_VOM, log_likelihood, 
-                               ess_tol=0.8, 
-                               diagnostics=diagnostics)
+    jtfilter.assimilation_step(psi_VOM, log_likelihood,
+                               diagnostics=diagnostics,
+                                ess_tol=-0.7,
+                                taylor_test=False,
+                                tao_params=tao_params)
 
     # # garbage cleanup --not sure if improved speed
     PETSc.garbage_cleanup(PETSc.COMM_SELF)
@@ -122,6 +163,19 @@ for k in range(N_obs):
     # temp_count.append(jtfilter.temper_count)
     # Print('temp_count', np.array(temp_count))
 
+if COMM_WORLD.rank == 0:
+    #print(jtfilter.temp_ensemblecopy)
+    #jitterin, descriptors = jitteringsamples.get_archive()
+    temperin, descriptors = temperingsamples.get_archive()
+    #print('Jiterin', jitterin)
+    np.save("new_tempering", temperin)
+    print('temperin', temperin)
+#     resampled, descriptors = nudgingsamples.get_archive()
+
+# #     np.save("before", before)
+# #     np.save("after", after)
+#     np.save("resampled", resampled)
+#     print(resampled)
 
 
 # if COMM_WORLD.rank == 0:
@@ -135,19 +189,19 @@ for k in range(N_obs):
 
 
 
-# # finally to store ensembles for further nudging
-Vcg = FunctionSpace(model.mesh, "CG", 1)  # Streamfunctions
-Vdg = FunctionSpace(model.mesh, "DQ", 1)  # PV space
-psi_e = Function(Vcg, name="psi_ensemble") # checkpoint streamfunc
-q_e = Function(Vdg, name="pv_ensemble")   # checkpoint vorticity
+# # # finally to store ensembles for further nudging
+# Vcg = FunctionSpace(model.mesh, "CG", 1)  # Streamfunctions
+# Vdg = FunctionSpace(model.mesh, "DQ", 1)  # PV space
+# psi_e = Function(Vcg, name="psi_ensemble") # checkpoint streamfunc
+# q_e = Function(Vdg, name="pv_ensemble")   # checkpoint vorticity
 
-erank = jtfilter.ensemble_rank
-filename = f"../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_temp{erank}.h5"
-with CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
-    for ilocal in range(nensemble[erank]):
-        q,psi = jtfilter.ensemble[ilocal][0].split()
-        psi_e.interpolate(psi)
-        afile.save_function(psi_e, idx=ilocal)
-        q_e.interpolate(q)
-        afile.save_function(q_e, idx=ilocal)
-        #print('Rank', erank, 'ilocal', ilocal,  norm(q_e))
+# erank = jtfilter.ensemble_rank
+# filename = f"../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_temp{erank}.h5"
+# with CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
+#     for ilocal in range(nensemble[erank]):
+#         q,psi = jtfilter.ensemble[ilocal][0].split()
+#         psi_e.interpolate(psi)
+#         afile.save_function(psi_e, idx=ilocal)
+#         q_e.interpolate(q)
+#         afile.save_function(q_e, idx=ilocal)
+#         #print('Rank', erank, 'ilocal', ilocal,  norm(q_e))

@@ -77,8 +77,8 @@ tao_params = {
     "tao_type": "lmvm",
     "tao_monitor": None,
     "tao_converged_reason": None,
-    "tao_gatol": 1.0e-4,
-    "tao_grtol": 1.0e-50,
+    "tao_gatol": 1.0e-2,
+    "tao_grtol": 1.0e-5,
     "tao_gttol": 1.0e-5,
 }
 
