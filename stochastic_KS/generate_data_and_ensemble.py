@@ -4,6 +4,8 @@ import numpy as np
 import math
 import nudging as ndg
 from nudging.models.stochastic_KS_CIP import KS_CIP
+from firedrake.pyplot import plot
+import matplotlib.pyplot as plt
 
 import os
 os.makedirs('../../DA_KS/', exist_ok=True)
@@ -22,7 +24,7 @@ params = {}
 
 nsteps = 5
 params["nsteps"] = nsteps
-xpoints = 20
+xpoints = 20    # no of obervation points 
 params["xpoints"] = xpoints
 L = 10.
 params["L"] = L
@@ -59,6 +61,8 @@ Nensemble = 90  # size of the ensemble
 
 spread_steps = math.ceil(4./dt/nsteps)
 
+u = fd.Function(model.Vdg)
+py_true = u.dat.data[:]
 
 
 X = model.allocate()
@@ -68,58 +72,73 @@ ndump = 20  # dump data
 p_dump = 0
 
 y_true = model.obs().dat.data[:]
-particle_in = np.zeros((y_true.size, Nensemble+1))
+particle_in = np.zeros((py_true.size, Nensemble+1))
 
 
+
+# initilization for particles 
 with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", 'w') as afile:
     afile.save_mesh(model.mesh)
-
-    
     X[0].assign(X_start[0])
-    for step in fd.ProgressBar("").iter(range(spread_steps)):
-        model.randomize(X)
-        model.run(X, X)
     for i in range(Nensemble+1):
         if i < Nensemble:
             print("Generating ensemble member", i)
         else:
             print("Generating 'true' value")
-        particle_in[:,i] = model.obs().dat.data[:]
+        model.randomize(X)
+        model.run(X, X)
         u = fd.Function(model.Vdg)
         u.rename('state')
         u.interpolate(model.un)
-        particle_init.write(u)
-
+        particle_init.write(u, time= i)
         uout.interpolate(X[0])
         afile.save_function(uout, idx=i)
+        particle_in[:,i] = u.dat.data[:] # to plot initlization of particle and truth
     np.save("../../DA_KS/particle_in.npy", particle_in)
 
 print("Generating the observational data.")
-N_obs = 500
+N_obs = 2000
 params["N_obs"] = N_obs
 
 
-y_true_full = np.zeros((N_obs, y_true.size))
+y_true_full = np.zeros((N_obs, py_true.size))
+y_true_obs = np.zeros((N_obs, y_true.size))
 y_obs_full = np.zeros((N_obs, y_true.size))
 
-noise_var = 1.5**2
+noise_var = 2.5**2
 params["noise_var"] = noise_var
 
-for i in fd.ProgressBar("").iter(range(N_obs)):
-    model.randomize(X)
-    model.run(X, X)  # run method for every time step
-    u = fd.Function(model.Vdg)
-    u.rename('state')
-    u.interpolate(model.un)
-    truth.write(u)
-    y_true = model.obs().dat.data[:]
-    y_true_full[i, :] = y_true
-    y_max = np.abs(y_true).max()
-    y_true_data = np.save("y_true.npy", y_true_full)
-    y_noise = np.random.normal(0.0, noise_var**0.5)
-    y_obs = y_true + y_noise
-    y_obs_full[i,:] = y_obs
-np.save("../../DA_KS/y_true.npy", y_true_full)
+utrue = fd.Function(model.Vdg, name="truth")
+print(utrue.function_space())
+# save truth for all observation points 
+with fd.CheckpointFile("../../DA_KS/ks_truth.h5", 'w') as afile:
+
+    for i in fd.ProgressBar("").iter(range(N_obs)):
+        model.randomize(X)
+        model.run(X, X)  # run method for every time step
+
+        # for paraview visulaization
+        u = fd.Function(model.Vdg)
+        u.rename('state')
+        u.interpolate(model.un)
+        truth.write(u)
+
+        # saving data at observation points
+        y_true_full[i, :] = u.dat.data[:]
+        y_true = model.obs().dat.data[:]
+        y_true_obs[i, :] = y_true
+        y_max = np.abs(y_true).max()
+        y_true_data = np.save("y_true.npy", y_true_full)
+        y_noise = np.random.normal(0.0, noise_var**0.5)
+        y_obs = y_true + y_noise
+        y_obs_full[i,:] = y_obs
+
+        # save truth in checkpoints
+        utrue.interpolate(X[0])
+        afile.save_function(utrue, idx=i)
+# save data of truth and obs
+np.save("../../DA_KS/y_true_allpoint.npy", y_true_full)
+np.save("../../DA_KS/y_true.npy", y_true_obs)
 np.save("../../DA_KS/y_obs.npy", y_obs_full)
 
 import pickle
