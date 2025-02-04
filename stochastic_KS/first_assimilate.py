@@ -35,20 +35,40 @@ jtfilter = ndg.jittertemp_filter(n_jitt=5, delta=0.15,
 
 jtfilter.setup(nensemble, model)
 
-# load mesh
-with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", "r", comm=jtfilter.subcommunicators.comm) as afile:
-    mesh = afile.load_mesh("ksmesh")
 
+# load data of particle initilization
 comm = jtfilter.subcommunicators.comm
 ecomm = jtfilter.subcommunicators.ensemble_comm
 # load the initial ensemble
-erank = jtfilter.ensemble_rank
-filename = f"../../DA_KS/checkpoint_files/ensemble_bs{erank}.h5"
-with fd.CheckpointFile(filename, 'r', comm=jtfilter.subcommunicators.comm) as afile:
+erank = ecomm.rank
+offset = np.concatenate((np.array([0]), np.cumsum(nensemble)))
+with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", "r", comm=comm) as afile:
+    mesh = afile.load_mesh("ksmesh")
     for i in range(nensemble[erank]):
+        idx = i + offset[erank]
+        #print('shape of idx', idx)
         u = jtfilter.ensemble[i][0]
-        u0 = afile.load_function(mesh, "u", idx = i) # read locally
+        u0 = afile.load_function(mesh, "u", idx = idx)
         u.interpolate(u0)
+
+
+
+
+
+# # load mesh
+# with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", "r", comm=jtfilter.subcommunicators.comm) as afile:
+#     mesh = afile.load_mesh("ksmesh")
+
+# comm = jtfilter.subcommunicators.comm
+# ecomm = jtfilter.subcommunicators.ensemble_comm
+# # load the initial ensemble
+# erank = jtfilter.ensemble_rank
+# filename = f"../../DA_KS/checkpoint_files/ensemble_bs{erank}.h5"
+# with fd.CheckpointFile(filename, 'r', comm=jtfilter.subcommunicators.comm) as afile:
+#     for i in range(nensemble[erank]):
+#         u = jtfilter.new_ensemble[i][0]
+#         u0 = afile.load_function(mesh, "u", idx = i) # read locally
+#         u.interpolate(u0)
 
 def log_likelihood(y, Y):
     ll = (y-Y)**2/2.5**2/2*fd.dx
@@ -109,12 +129,34 @@ diagnostics = [aftertempering, afterjittering, resamplingsamples]
 
 diagnostics = []
 
+# #--------------------------------------------------------------------
+# N_sim = 100
+# for k in range(N_sim):
+#     PETSc.Sys.Print("Simulation Step", k)
+#     for i in range(nensemble[jtfilter.ensemble_rank]):
+#         model.randomize(jtfilter.new_ensemble[i])
+#         model.run(jtfilter.new_ensemble[i], jtfilter.new_ensemble[i]) 
+#         fwd_simdata = model.obs().dat.data[:]
+#         for m in range(y.shape[1]):
+#             y_sim_list[m].dlocal[i] = fwd_simdata[m]
+    
+    
+#     for m in range(y.shape[1]):
+#         y_sim_list[m].synchronise()
+#         if fd.COMM_WORLD.rank == 0:
+#             y_sim[:, k, m] = y_sim_list[m].data()
+
+# # # now copy last simulated value for assimilation of particles
+# for i in range(nensemble[jtfilter.ensemble_rank]):
+#     jtfilter.ensemble[i][0].assign(jtfilter.new_ensemble[i][0])
+# #--------------------------------------------------------------------------
+
 
 # To  count temping steps
 temp_count = []
 
 
-#N_obs = 50
+# N_obs = 100
 # do assimiliation step
 #PETSc.Sys.Print('assimilation step')
 for k in range(N_obs):
@@ -126,30 +168,25 @@ for k in range(N_obs):
     jtfilter.assimilation_step(yVOM, log_likelihood,  ess_tol=0.8,  diagnostics=diagnostics)
     temp_count.append(jtfilter.temper_count)
 
-    # for i in range(nensemble[jtfilter.ensemble_rank]):
-    #     model.un.assign(jtfilter.ensemble[i][0])
-    #     obsdata = model.obs().dat.data[:]
-    #     for m in range(y.shape[1]):
-    #         y_e_list[m].dlocal[i] = obsdata[m]
+    for i in range(nensemble[jtfilter.ensemble_rank]):
+        model.un.assign(jtfilter.ensemble[i][0])
+        obsdata = model.obs().dat.data[:]
+        for m in range(y.shape[1]):
+            y_e_list[m].dlocal[i] = obsdata[m]
 
-    # for m in range(y.shape[1]):
-    #     y_e_list[m].synchronise()
-    #     if fd.COMM_WORLD.rank == 0:
-    #         y_e[:, k, m] = y_e_list[m].data()
+    for m in range(y.shape[1]):
+        y_e_list[m].synchronise()
+        if fd.COMM_WORLD.rank == 0:
+            y_e[:, k, m] = y_e_list[m].data()
+
 
 if fd.COMM_WORLD.rank == 0:
-    np.save("../../DA_KS/temp_count.npy", np.array(temp_count))
-
-
-# if fd.COMM_WORLD.rank == 0:
-#     # print(y_sim[:, 8, 19])
-#     # plt.hist(y_sim[:, 8, 19])
-#     # plt.show()
-#     print("ensemble shape", y_e.shape)
-#     if not nudging:
-#         np.save("../../DA_KS/500tempjitt_assimilated_ensemble.npy", y_e)
-#     if nudging:
-#         np.save("../../DA_KS/nudge_assimilated_ensemble.npy", y_e)
+    print("ensemble shape", y_e.shape)
+    np.save("../../DA_KS/temp_count_2500.npy", np.array(temp_count))
+    if not nudging:
+        np.save("../../DA_KS/2500_tempjitt_assimilated_ensemble.npy", y_e)
+    if nudging:
+        np.save("../../DA_KS/nudge_assimilated_ensemble.npy", y_e)
 
 
 
@@ -192,15 +229,15 @@ if fd.COMM_WORLD.rank == 0:
 
 
 # # # # do checkpointing for nudging afterwards
-# CG2 = fd.FunctionSpace(model.mesh, "CG", 2)
-# uout = fd.Function(CG2, name="u")
+CG2 = fd.FunctionSpace(model.mesh, "CG", 2)
+uout = fd.Function(CG2, name="u")
 
-# erank = jtfilter.ensemble_rank
-# filename = f"../../DA_KS/checkpoint_files/ensemble_temp_500{erank}.h5"
-# with fd.CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
-#     for i in range(nensemble[erank]):
-#         u = jtfilter.ensemble[i][0]
-#         uout.interpolate(u0)
-#         afile.save_function(uout, idx=i)
+erank = jtfilter.ensemble_rank
+filename = f"../../DA_KS/checkpoint_files/ensemble_temp_2500{erank}.h5"
+with fd.CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
+    for i in range(nensemble[erank]):
+        u = jtfilter.ensemble[i][0]
+        uout.interpolate(u)
+        afile.save_function(uout, idx=i)
 
 

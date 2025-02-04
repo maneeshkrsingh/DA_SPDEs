@@ -26,9 +26,9 @@ nsteps = 5
 params["nsteps"] = nsteps
 xpoints = 20    # no of obervation points 
 params["xpoints"] = xpoints
-L = 10.
+L = 4.
 params["L"] = L
-dt = 0.005
+dt = 0.0035
 params["dt"] = dt
 nu = 0.02923
 params["nu"] = nu
@@ -61,15 +61,15 @@ Nensemble = 90  # size of the ensemble
 
 spread_steps = math.ceil(4./dt/nsteps)
 
-u = fd.Function(model.Vdg)
-py_true = u.dat.data[:]
+
 
 
 X = model.allocate()
 CG2 = fd.FunctionSpace(model.mesh, "CG", 2)
 uout = fd.Function(CG2, name="u")
-ndump = 20  # dump data
-p_dump = 0
+u = fd.Function(CG2)
+py_true = u.dat.data[:]
+
 
 y_true = model.obs().dat.data[:]
 particle_in = np.zeros((py_true.size, Nensemble+1))
@@ -79,21 +79,25 @@ particle_in = np.zeros((py_true.size, Nensemble+1))
 # initilization for particles 
 with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", 'w') as afile:
     afile.save_mesh(model.mesh)
-    X[0].assign(X_start[0])
     for i in range(Nensemble+1):
         if i < Nensemble:
             print("Generating ensemble member", i)
         else:
             print("Generating 'true' value")
-        model.randomize(X)
-        model.run(X, X)
+        X[0].assign(X_start[0])
+        for j in fd.ProgressBar("").iter(range(5)):
+            model.randomize(X)
+            model.run(X, X)
+        # paraview output
         u = fd.Function(model.Vdg)
-        u.rename('state')
+        u.rename('particle_init')
         u.interpolate(model.un)
         particle_init.write(u, time= i)
+
+        uout = fd.Function(model.V, name="particle_init")
         uout.interpolate(X[0])
         afile.save_function(uout, idx=i)
-        particle_in[:,i] = u.dat.data[:] # to plot initlization of particle and truth
+        particle_in[:,i] = uout.dat.data[:] # to plot initlization of particle and truth
     np.save("../../DA_KS/particle_in.npy", particle_in)
 
 print("Generating the observational data.")
@@ -101,15 +105,14 @@ N_obs = 2000
 params["N_obs"] = N_obs
 
 
-y_true_full = np.zeros((N_obs, py_true.size))
+
 y_true_obs = np.zeros((N_obs, y_true.size))
 y_obs_full = np.zeros((N_obs, y_true.size))
 
 noise_var = 2.5**2
 params["noise_var"] = noise_var
 
-utrue = fd.Function(model.Vdg, name="truth")
-print(utrue.function_space())
+
 # save truth for all observation points 
 with fd.CheckpointFile("../../DA_KS/ks_truth.h5", 'w') as afile:
 
@@ -124,20 +127,18 @@ with fd.CheckpointFile("../../DA_KS/ks_truth.h5", 'w') as afile:
         truth.write(u)
 
         # saving data at observation points
-        y_true_full[i, :] = u.dat.data[:]
         y_true = model.obs().dat.data[:]
         y_true_obs[i, :] = y_true
-        y_max = np.abs(y_true).max()
-        y_true_data = np.save("y_true.npy", y_true_full)
         y_noise = np.random.normal(0.0, noise_var**0.5)
         y_obs = y_true + y_noise
         y_obs_full[i,:] = y_obs
 
         # save truth in checkpoints
+        utrue = fd.Function(model.V, name="truth")
         utrue.interpolate(X[0])
         afile.save_function(utrue, idx=i)
 # save data of truth and obs
-np.save("../../DA_KS/y_true_allpoint.npy", y_true_full)
+
 np.save("../../DA_KS/y_true.npy", y_true_obs)
 np.save("../../DA_KS/y_obs.npy", y_obs_full)
 

@@ -7,8 +7,6 @@ from pyop2.mpi import MPI
 from firedrake.__future__ import interpolate
 from nudging.models.stochastic_KS_CIP import KS_CIP
 from firedrake.output import VTKFile
-
-
 import pickle
 
 with open("params.pickle", 'rb') as handle:
@@ -22,7 +20,7 @@ nu = params["nu"]
 dc = params["dc"]
 #dc = 2.5
 
-nensemble = [2]*30
+nensemble = [3]*30
 
 model = KS_CIP(nsteps, xpoints, seed=12353, lambdas=True,
                dt=dt, nu=nu, dc=dc, L=L)
@@ -43,6 +41,8 @@ ecomm = jtfilter.subcommunicators.ensemble_comm
 with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", "r", comm=comm) as afile:
     mesh = afile.load_mesh("ksmesh")
 
+
+
 # load the initial ensemble
 erank = ecomm.rank
 offset = np.concatenate((np.array([0]), np.cumsum(nensemble)))
@@ -50,8 +50,23 @@ with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", "r", comm=comm) as afile:
     for i in range(nensemble[erank]):
         idx = i + offset[erank]
         u = jtfilter.ensemble[i][0]
-        u0 = afile.load_function(mesh, "particle_init", idx = idx)
+        u0 = afile.load_function(mesh, "u", idx = idx)
         u.interpolate(u0)
+
+
+# filename = f"../../DA_KS/checkpoint_files/ensemble_nudge_500{erank}.h5"
+# with fd.CheckpointFile(filename, 'r', comm=jtfilter.subcommunicators.comm) as afile:
+#      for i in range(nensemble[erank]):
+#          u = jtfilter.ensemble[i][0]
+#          u0 = afile.load_function(mesh, "u", idx = i) # read locally
+#          u.interpolate(u0)
+
+
+#for smoother output
+Q = fd.FunctionSpace(mesh, 'CG', 1)
+u_out = fd.Function(Q)
+
+
 
 def log_likelihood(y, Y):
     ll = (y-Y)**2/2.5**2/2*fd.dx
@@ -59,12 +74,13 @@ def log_likelihood(y, Y):
 
 
 # Load data
+y_exact_all = np.load('../../DA_KS/y_true_allpoint.npy')
 y_exact = np.load('../../DA_KS/y_true.npy')
 y = np.load('../../DA_KS/y_obs.npy')
 
 PETSc.Sys.Print('shape of y', y.shape)
 N_obs = y.shape[0]
-#N_obs = 500
+N_obs = 5
 
 yVOM = fd.Function(model.VVOM)
 
@@ -73,7 +89,7 @@ yVOM = fd.Function(model.VVOM)
 y_e_list = []
 err_shared = ndg.SharedArray(partition=nensemble,
                                  comm=ecomm)
-for m in range(y.shape[1]):
+for m in range(y.shape[0]):
     y_e_shared = ndg.SharedArray(partition=nensemble,
                                  comm=ecomm)
     y_e_list.append(y_e_shared)
@@ -84,79 +100,42 @@ if fd.COMM_WORLD.rank == 0:
     y_e = np.zeros((np.sum(nensemble), N_obs, ys[1]))
 Err_final = np.zeros((N_obs))
 # diagnostic
-diagnostics = []
+
+
 
 outfile = []
 #nensemble stores the number of particles per rank
 for i in range(nensemble[jtfilter.ensemble_rank]):
     ensemble_idx = sum(nensemble[:jtfilter.ensemble_rank]) + i
-    outfile.append(VTKFile(f"../../DA_KS/BS_1000/{ensemble_idx}_output.pvd", comm=jtfilter.subcommunicators.comm))
+    outfile.append(VTKFile(f"../../DA_KS/BS/{ensemble_idx}_output.pvd", comm=jtfilter.subcommunicators.comm))
 
-
-
-lis_tao_params = []
-for step in range(nsteps):
-    if step in (0, 1):
-        tao_params = {
-            "tao_type": "lmvm",
-            "tao_monitor": None,
-            "tao_converged_reason": None,
-            "tao_gatol": 1.0e-2,
-            "tao_grtol": 1.0e-2,
-            "tao_gttol": 1.0e-2,
-            }
-    elif step == 2:
-        tao_params = {
-            "tao_type": "lmvm",
-            "tao_monitor": None,
-            "tao_converged_reason": None,
-            "tao_gatol": 1.0e-2,
-            "tao_grtol": 1.0e-3,
-            "tao_gttol": 1.0e-3,
-            }
-    else:
-        tao_params = {
-            "tao_type": "lmvm",
-            "tao_monitor": None,
-            "tao_converged_reason": None,
-            "tao_gatol": 1.0e-2,
-            "tao_grtol": 1.0e-3,
-            "tao_gttol": 1.0e-3,
-            }
-    lis_tao_params.append(tao_params)
-
-
-tao_params = {
-    "tao_type": "lmvm",
-    "tao_monitor": None,
-    "tao_converged_reason": None,
-    "tao_gatol": 1.0e-2,
-    "tao_grtol": 1.0e-3,
-    "tao_gttol": 1.0e-3,
-}
 
 # do assimiliation step
 for k in range(N_obs):
     PETSc.Sys.Print("Assimlation Step", k)
     yVOM.dat.data[:] = y[k,:]
 
-    # # # actually do the data assimilation step
-    jtfilter.assimilation_step(yVOM, log_likelihood,  ess_tol=-9000.8,  diagnostics=diagnostics)
-    # # # actually do the data assimilation step
-    # jtfilter.assimilation_step(yVOM, log_likelihood, diagnostics=diagnostics,
-    #                             ess_tol=-1000.8,
-    #                             taylor_test=False,
-    #                             tao_params=tao_params)
+    # # actually do the data assimilation step
+    jtfilter.assimilation_step(yVOM, log_likelihood,  ess_tol=-990.8,  diagnostics=[])
 
-    # # load truth for error comparison
+    # load truth for error comparison
     for i in range(nensemble[jtfilter.ensemble_rank]):
-        # #VTK file
-        particle_vtk = fd.Function(model.Vdg, name='asmlted_particles')
-        particle_vtk.interpolate(jtfilter.ensemble[i][0])
-        outfile[i].write(particle_vtk, time=k)
+        # VTK file 
+        u_out.interpolate(jtfilter.ensemble[i][0])
+        outfile[i].write(u_out, time=k)
+        # save all assimilated ensemble 
+        ensemble_idx = sum(nensemble[:jtfilter.ensemble_rank]) + i
+        u_enseble = fd.Function(Q, name="assimilated_particles")
+        u_enseble.interpolate(jtfilter.ensemble[i][0])
+        PETSc.Sys.Print("Assimlation Step", k, "ensmeble norm", fd.norm(u_enseble))
+        ensemble_cp_file = f"../../DA_KS/checkpoint_files/assimilated_ensemble_cp{ensemble_idx}.h5"
+        with fd.CheckpointFile(ensemble_cp_file, 'w', comm=jtfilter.subcommunicators.comm) as afile:
+            #afile.save_function(u, idx=k, name=str(ensemble_idx))
+            PETSc.Sys.Print(f"Saving k={k} to {ensemble_cp_file}")  # Debugging line
+            afile.save_function(u_enseble, idx=k)
 
-        CG2 = fd.FunctionSpace(mesh, "CG", 2)
-        u_particle = fd.Function(CG2)
+        Vdg = fd.FunctionSpace(mesh, "DG", 1)
+        u_particle = fd.Function(Vdg)
         u_particle.interpolate(jtfilter.ensemble[i][0])
         with fd.CheckpointFile("../../DA_KS/ks_truth.h5", "r", comm=comm) as afile:
             u_true = afile.load_function(mesh, "truth", idx = k)
@@ -179,35 +158,46 @@ for k in range(N_obs):
             y_e[:, k, m] = y_e_list[m].data()
 
 
+# # Initialize a dictionary to store dynamic lists
+# dynamic_lists = {}
 
-if fd.COMM_WORLD.rank == 0:
-    #print(Err_final.shape, Err_final)
-    np.save("../../DA_KS/2000_error_bs_ensemble.npy", Err_final)
-    np.save("../../DA_KS/2000_bs_ensemble.npy", y_e)
+# # Define the function space
+# CG1 = fd.FunctionSpace(mesh, "CG", 1)
 
-# # # # # # do checkpointing for future assimilations 
-# CG2 = fd.FunctionSpace(model.mesh, "CG", 2)
-# uout = fd.Function(CG2, name="temp500u")
+# # Loop over ensemble members
+# for ensemble_member in range(90):
+#     list_name = f"list_{ensemble_member}"  # Dynamic list name
+#     dynamic_lists[list_name] = []  # Initialize an empty list in the dictionary
+    
+#     # Construct the filename
+#     filename = f"../../DA_KS/checkpoint_files/assimilated_ensemble_cp{ensemble_member}.h5"
+    
+#     # Open the checkpoint file
+#     with fd.CheckpointFile(filename, 'r') as afile:
+#         for k in range(N_obs):
+#             # Load the function from the checkpoint file
+#             u0 = afile.load_function(mesh, "assimilated_particles", idx=k)
+            
+#             # Interpolate the function to the CG1 space
+#             u = fd.Function(CG1)
+#             u.interpolate(u0)
+            
+#             # Append the interpolated function to the corresponding list
+#             dynamic_lists[list_name].append(u)
+   
 
-# erank = jtfilter.ensemble_rank
-# filename = f"../../DA_KS/checkpoint_files/ensemble_temp_500{erank}.h5"
-# with fd.CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
-#     for i in range(nensemble[erank]):
-#         u = jtfilter.ensemble[i][0]
-#         uout.interpolate(u)
-#         afile.save_function(uout, idx=i)
 
 # if fd.COMM_WORLD.rank == 0:
-#     #print(Err_final.shape, Err_final)
-#     np.save("../../DA_KS/250_error_nudge_ensemble.npy", Err_final)
-#     np.save("../../DA_KS/250_nudge_ensemble.npy", y_e)
+#     print(Err_final.shape, Err_final)
+#     np.save("../../DA_KS/500_error_bs_ensemble.npy", Err_final)
+#     np.save("../../DA_KS/500_bs_ensemble.npy", y_e)
 
-# # # # # # do checkpointing for future assimilations 
+# # # # # do checkpointing for future assimilations 
 # CG2 = fd.FunctionSpace(model.mesh, "CG", 2)
-# uout = fd.Function(CG2, name="nudge250u")
+# uout = fd.Function(CG2, name="u")
 
 # erank = jtfilter.ensemble_rank
-# filename = f"../../DA_KS/checkpoint_files/ensemble_nudge_250{erank}.h5"
+# filename = f"../../DA_KS/checkpoint_files/ensemble_bs_500{erank}.h5"
 # with fd.CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
 #     for i in range(nensemble[erank]):
 #         u = jtfilter.ensemble[i][0]
