@@ -19,7 +19,7 @@ RB_err_nudge_df = pd.DataFrame(RB_err_nudge[:1500])
 RB_err_nudge_roll =RB_err_nudge_df.rolling(N_df).mean()
 
 
-#plt.plot(RB_err_bs_roll,  linestyle='-', color='r', markersize=6, linewidth=2,  label='Bootstrap')
+plt.plot(RB_err_bs_roll,  linestyle='-', color='r', markersize=6, linewidth=2,  label='Bootstrap')
 plt.plot(RB_err_temp_roll,   linestyle='-', color='m', markersize=6, linewidth=2, label='Temp+jitt')
 plt.plot(RB_err_nudge_roll,  linestyle='-', color='g', markersize=6, linewidth=2, label='Nudge only')
 plt.title('Error Comparison RB')
@@ -42,7 +42,7 @@ ERE_err_temp_roll =ERE_err_temp_df.rolling(N_df).mean()
 ERE_err_nudge_df = pd.DataFrame(ERE_err_nudge[:1500])
 ERE_err_nudge_roll =ERE_err_nudge_df.rolling(N_df).mean()
 
-#plt.plot(ERE_err_bs_roll,  linestyle='-', color='r', markersize=6, linewidth=2,  label='Bootstrap')
+plt.plot(ERE_err_bs_roll,  linestyle='-', color='r', markersize=6, linewidth=2,  label='Bootstrap')
 plt.plot(ERE_err_temp_roll,   linestyle='-', color='m', markersize=6, linewidth=2, label='Temp+jitt')
 plt.plot(ERE_err_nudge_roll,  linestyle='-', color='g', markersize=6, linewidth=2, label='Nudge only')
 plt.title('Error Comparison RMSE')
