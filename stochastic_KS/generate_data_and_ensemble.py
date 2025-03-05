@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 import os
 os.makedirs('../../DA_KS/', exist_ok=True)
-os.makedirs('../../DA_KS/checkpoint_files/', exist_ok=True)
+# os.makedirs('../../DA_KS/checkpoint_files/', exist_ok=True)
 """
 create some synthetic data/observation data at T_1 ---- T_Nobs
 Pick initial conditon
