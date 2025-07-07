@@ -61,11 +61,19 @@ with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", "r", comm=comm) as afile:
         u.interpolate(u0)
 
 
+<<<<<<< HEAD
 # filename = f"../../DA_KS/Nudge_multi_stage/ensemble_nudge_150{erank}.h5"
 # with fd.CheckpointFile(filename, 'r', comm=jtfilter.subcommunicators.comm) as afile:
 #      for i in range(nensemble[erank]):
 #          u = jtfilter.ensemble[i][0]
 #          u0 = afile.load_function(mesh, "nudge150u", idx = i) # read locally
+=======
+# filename = f"../../DA_KS/Nudge_checkpoint_files/ensemble_nudge_1250{erank}.h5"
+# with fd.CheckpointFile(filename, 'r', comm=jtfilter.subcommunicators.comm) as afile:
+#      for i in range(nensemble[erank]):
+#          u = jtfilter.ensemble[i][0]
+#          u0 = afile.load_function(mesh, "nudge1250u", idx = i) # read locally
+>>>>>>> 8c3fe9ba3f17c9fafb5d0ce4f351c1220eed3db6
 #          u.interpolate(u0)
 
 
@@ -142,7 +150,11 @@ for k in range(N_obs):
     uout = fd.Function(CG2, name="asm_particle")
 
     erank = jtfilter.ensemble_rank
+<<<<<<< HEAD
     filename = f"../../DA_KS/Temp_multi_stage/ensembles_assimilated/ensemble_ch_{k}_{erank}.h5"
+=======
+    filename = f"../../DA_KS/Nudge_checkpoint_files/ensembles_assimilated/ensemble_ch_{k}_{erank}.h5"
+>>>>>>> 8c3fe9ba3f17c9fafb5d0ce4f351c1220eed3db6
     with fd.CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
         for i in range(nensemble[erank]):
             u = jtfilter.ensemble[i][0]
@@ -164,6 +176,7 @@ for k in range(N_obs):
         y_e_list[m].synchronise()
         if fd.COMM_WORLD.rank == 0:
             y_e[:, k, m] = y_e_list[m].data()
+<<<<<<< HEAD
             np.save("../../DA_KS/tempjitt_ensemble.npy", y_e)
 
 
@@ -180,3 +193,21 @@ for k in range(N_obs):
 #         u = jtfilter.ensemble[i][0]
 #         uout.interpolate(u)
 #         afile.save_function(uout, idx=i)
+=======
+
+if fd.COMM_WORLD.rank == 0:
+    np.save("../../DA_KS/250_nudge_only_ensemble.npy", y_e)
+
+
+# # # # do checkpointing for future assimilations 
+CG2 = fd.FunctionSpace(model.mesh, "CG", 2)
+uout = fd.Function(CG2, name="nudge250u")
+
+erank = jtfilter.ensemble_rank
+filename = f"../../DA_KS/Nudge_checkpoint_files/ensemble_nudge_250{erank}.h5"
+with fd.CheckpointFile(filename, 'w', comm=jtfilter.subcommunicators.comm) as afile:
+    for i in range(nensemble[erank]):
+        u = jtfilter.ensemble[i][0]
+        uout.interpolate(u)
+        afile.save_function(uout, idx=i)
+>>>>>>> 8c3fe9ba3f17c9fafb5d0ce4f351c1220eed3db6
