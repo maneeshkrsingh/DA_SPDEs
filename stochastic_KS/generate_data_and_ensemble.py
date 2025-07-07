@@ -16,19 +16,19 @@ Pick initial conditon
 run model, get true value and obseravation and use paraview for viewing
 add observation noise N(0, sigma^2) 
 """
-truth_init = VTKFile("../../DA_KS/truth_init.pvd")
-truth = VTKFile("../../DA_KS/truth.pvd")
-particle_init = VTKFile("../../DA_KS/particle_init.pvd")
+# truth_init = VTKFile("../../DA_KS/truth_init.pvd")
+# truth = VTKFile("../../DA_KS/truth.pvd")
+# particle_init = VTKFile("../../DA_KS/particle_init.pvd")
 
 params = {}
 
 nsteps = 5
 params["nsteps"] = nsteps
-xpoints = 20    # no of obervation points 
+xpoints = 10    # no of obervation points 
 params["xpoints"] = xpoints
 L = 4.
 params["L"] = L
-dt = 0.0035
+dt = 0.005
 params["dt"] = dt
 nu = 0.02923
 params["nu"] = nu
@@ -50,10 +50,11 @@ print("Finding an initial state.")
 for i in fd.ProgressBar("").iter(range(200)):
     model.randomize(X_start)
     model.run(X_start, X_start)  # run method for every time step
-    u = fd.Function(model.Vdg)
-    u.rename('state')
-    u.interpolate(model.un)
-    truth_init.write(u)
+    #particle_init = model.obs().dat.data[:]
+    # u = fd.Function(model.Vdg)
+    # u.rename('state')
+    # u.interpolate(model.un)
+    # truth_init.write(u)
 
 print("generating ensemble.")
 
@@ -75,6 +76,28 @@ y_true = model.obs().dat.data[:]
 particle_in = np.zeros((py_true.size, Nensemble+1))
 
 
+# particle_all_time = []
+# N_obs = 100
+# for i in range(Nensemble+1):
+#     if i < Nensemble:
+#         print("Generating ensemble member", i)
+#     else:
+#         print("Generating 'true' value")
+    
+#     X[0].assign(X_start[0]) 
+#     particle_in_time = np.zeros((N_obs+1, y_true.size))
+#     particle_in_time[0, :] = particle_init # 0th time step
+#     for j in fd.ProgressBar("").iter(range(N_obs)):
+#         model.randomize(X)
+#         model.run(X, X)
+#         particle = model.obs().dat.data[:]  # first time step
+#         particle_in_time[j+1, :] = particle
+#     particle_all_time.append(particle_in_time)
+        
+# np.save("../../DA_KS/particle_altime.npy", np.array(particle_all_time))
+
+
+# quit()
 
 # initilization for particles 
 with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", 'w') as afile:
@@ -88,11 +111,12 @@ with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", 'w') as afile:
         for j in fd.ProgressBar("").iter(range(5)):
             model.randomize(X)
             model.run(X, X)
-        # paraview output
-        u = fd.Function(model.Vdg)
-        u.rename('particle_init')
-        u.interpolate(model.un)
-        particle_init.write(u, time= i)
+             
+        # # paraview output
+        # u = fd.Function(model.Vdg)
+        # u.rename('particle_init')
+        # u.interpolate(model.un)
+        # particle_init.write(u, time= i)
 
         uout = fd.Function(model.V, name="particle_init")
         uout.interpolate(X[0])
@@ -109,7 +133,7 @@ params["N_obs"] = N_obs
 y_true_obs = np.zeros((N_obs, y_true.size))
 y_obs_full = np.zeros((N_obs, y_true.size))
 
-noise_var = 2.5**2
+noise_var = 1.05**2
 params["noise_var"] = noise_var
 
 
@@ -120,11 +144,11 @@ with fd.CheckpointFile("../../DA_KS/ks_truth.h5", 'w') as afile:
         model.randomize(X)
         model.run(X, X)  # run method for every time step
 
-        # for paraview visulaization
-        u = fd.Function(model.Vdg)
-        u.rename('state')
-        u.interpolate(model.un)
-        truth.write(u)
+        # # for paraview visulaization
+        # u = fd.Function(model.Vdg)
+        # u.rename('state')
+        # u.interpolate(model.un)
+        # truth.write(u)
 
         # saving data at observation points
         y_true = model.obs().dat.data[:]

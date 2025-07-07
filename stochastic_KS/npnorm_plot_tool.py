@@ -40,14 +40,18 @@ y_e_temp_x = np.transpose(y_e_temp, (2,0,1))
 print(y_e_temp_time.shape)
 
 # load all nudge
-y_e_nudge_250 = np.load('250_nudge_only_ensemble.npy')
-y_e_nudge_500 = np.load('500_nudge_only_ensemble.npy')
-y_e_nudge_750 = np.load('750_nudge_only_ensemble.npy')
-y_e_nudge_1000 = np.load('1000_nudge_only_ensemble.npy')
-y_e_nudge_1250 = np.load('1250_nudge_only_ensemble.npy')
-y_e_nudge_1500 = np.load('1500_nudge_only_ensemble.npy')
+# y_e_nudge_250 = np.load('250_nudge_only_ensemble.npy')
+# y_e_nudge_500 = np.load('500_nudge_only_ensemble.npy')
+# y_e_nudge_750 = np.load('750_nudge_only_ensemble.npy')
+# y_e_nudge_1000 = np.load('1000_nudge_only_ensemble.npy')
+# y_e_nudge_1250 = np.load('1250_nudge_only_ensemble.npy')
+# y_e_nudge_1500 = np.load('1500_nudge_only_ensemble.npy')
 
-y_e_nudge = np.concatenate((y_e_nudge_250, y_e_nudge_500, y_e_nudge_750, y_e_nudge_1000, y_e_nudge_1250, y_e_nudge_1500), axis=1)
+# y_e_nudge = np.concatenate((y_e_nudge_250, y_e_nudge_500, y_e_nudge_750, y_e_nudge_1000, y_e_nudge_1250, y_e_nudge_1500), axis=1)
+
+
+
+y_e_nudge = np.load('100_nudge_only_ensemble.npy')
 print('ensemble nudge', y_e_nudge.shape) 
 y_e_nudge_time = np.transpose(y_e_nudge, (1,0,2))
 y_e_nudge_x = np.transpose(y_e_nudge, (2,0,1))
@@ -60,7 +64,7 @@ y_ensemble_nudge_avg_time = np.mean(y_e_nudge_time, axis=1)
 
 
 
-N_rmse = 1500
+N_rmse = 100
 y_rmse_bs = np.zeros(N_rmse)
 y_rmse_temp = np.zeros(N_rmse)
 y_rmse_nudge = np.zeros(N_rmse)
@@ -75,7 +79,7 @@ for i in range(N_rmse):
 
 
 
-N_df = 100
+N_df = 1
 
 
 
