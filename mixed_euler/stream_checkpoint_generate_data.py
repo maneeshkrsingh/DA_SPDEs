@@ -18,12 +18,15 @@ truth = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth.pvd"
 truth_init_ptb = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/truth_init_ptb.pvd")
 particle_init = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/particle_init.pvd")
 
-nensemble = [1]*50
+Print = PETSc.Sys.Print
+
+nensemble = [3]*30
 N_obs = 250
 N_init = 250
-n = 32
+n = 16
 nsteps = 5
 dt = 1/40
+
 
 
 comm=fd.COMM_WORLD
@@ -55,13 +58,14 @@ Vu = VectorFunctionSpace(mesh, "DQ", 0)  # DQ elements for velocity
 v = Function(Vu, name="gradperp(stream function)")
 u_energy = []
 ### To forward run for creating initlization  for truth and particles
-for i in range(N_init):
+Print("Finding an initial state.")
+for i in fd.ProgressBar("").iter(range(N_init)):
     model.randomize(X0_truth)
     model.run(X0_truth, X0_truth)
     # psi_VOM = model.obs()
-    if i % 10 == 0:
-        PETSc.Sys.Print('========Step=============', i)
-        PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1), 'noise', fd.norm(model.dU_3))
+    # if i % 10 == 0:
+    #     Print('========Step=============', i)
+    #     Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1), 'noise', fd.norm(model.dU_3))
     q,psi = model.qpsi1.subfunctions
     v.project(gradperp(model.qpsi0[1]))
     u_energy.append(0.5*norm(v))
@@ -92,15 +96,15 @@ pv_chp = Function(Vdg, name="pv_chp")   # checkpoint vorticity
 ndump = 20  # dump data
 p_dump = 0
 
-psi_particle_init = np.zeros((sum(nensemble), np.size(psi_true)))
+psi_particle_init = np.zeros((sum(nensemble)+1, np.size(psi_true)))
 with fd.CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_init.h5", 
                        'w') as afile:
     #afile.save_mesh(mesh)
-    for i in range(sum(nensemble)+1):
+    for i in fd.ProgressBar("").iter(range(sum(nensemble)+1)):
         if i < (sum(nensemble)):
-            print("Generating ensemble member", i)
+            Print("Initlisation of  particles")
         else:
-            print("Generating 'true' value")
+            Print("Initlisation of truth")
         X_particle[0].assign(X0_truth[0])
         for j in range(ndump):
             model.randomize(X_particle)
@@ -108,7 +112,7 @@ with fd.CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble
         q,psi = model.qpsi1.subfunctions
         q.rename("Vorticity")
         psi.rename("stream function")
-        PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1))
+        #PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1))
         psi_chp.interpolate(psi)
         pv_chp.interpolate(q)
 
@@ -123,10 +127,10 @@ with fd.CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble
 
         if comm.rank == 0:
             psi_particle_init[p_dump,:] = psi_particle
+            p_dump += 1
     np.save("../../DA_Results/2DEuler_mixed/psi_particle_init.npy", psi_particle_init)
 
 ### To store initlization  for truth 
-PETSc.Sys.Print('=============Generating the observational data.=================')
 X_truth = model.allocate()
 X_truth[0].assign(X_particle[0])
 
@@ -134,11 +138,11 @@ X_truth[0].assign(X_particle[0])
 psi_true_all = np.zeros((N_obs, np.size(psi_true)))
 psi_obs_all = np.zeros((N_obs, np.size(psi_true)))
 
-for i in range(N_obs):
-    PETSc.Sys.Print('=============In N_obs step=================', i)
+Print("Generating the observational data.")
+for i in fd.ProgressBar("").iter(range(N_obs)):
     model.randomize(X_truth)
     model.run(X_truth, X_truth)
-    PETSc.Sys.Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1))
+    #Print('vorticity norm', fd.norm(model.q1), 'psi norm', fd.norm(model.psi1))
     q,psi = model.qpsi1.subfunctions
     q.rename("Vorticity")
     psi.rename("stream function")
@@ -148,12 +152,12 @@ for i in range(N_obs):
     psi_VOM_out = Function(model.VVOM_out)
     psi_VOM_out.interpolate(psi_VOM)
     psi_true = psi_VOM_out.dat.data_ro.copy()
-    print('psi_true_squared', fd.assemble(psi_VOM_out**2*fd.dx))
+    #Print('psi_true_squared', fd.assemble(psi_VOM_out**2*fd.dx))
     if comm.rank == 0:
         psi_true_all[i,:]= psi_true
-        PETSc.Sys.Print('psi_true_ABS', psi_true.max(), psi_true.min())
-        psi_noise = np.random.normal(0.0, 0.001, (int(n/2+1)**2 ) )# mean = 0, sd = 0.05
-        PETSc.Sys.Print('Noise', psi_noise.max(), psi_noise.min())
+        #Print('psi_true_ABS', psi_true.max(), psi_true.min())
+        psi_noise = np.random.normal(0.0, 0.001, (int(n/4+1)**2 ) )# mean = 0, sd = 0.05
+        #Print('Noise', psi_noise)
         psi_max = np.abs(psi_true).max()
         psi_obs = psi_true + (1/psi_max)*psi_noise*psi_true # To get similar boundary values as truth 
         psi_obs_all[i,:] = psi_obs
