@@ -37,7 +37,7 @@ print(y_e_temp_time.shape)
 
 
 
-y_e_nudge = np.load('100_nudge_only_ensemble.npy')
+y_e_nudge = np.load('final_nudgejitt_ensemble.npy')
 print('ensemble nudge', y_e_nudge.shape) 
 y_e_nudge_time = np.transpose(y_e_nudge, (1,0,2))
 y_e_nudge_x = np.transpose(y_e_nudge, (2,0,1))
@@ -47,15 +47,8 @@ y_ensemble_temp_avg_time = np.mean(y_e_temp_time, axis=1)
 y_ensemble_bs_avg_time = np.mean(y_e_bs_time, axis=1)
 y_ensemble_nudge_avg_time = np.mean(y_e_nudge_time, axis=1)
 
-<<<<<<< HEAD
 
-
-
-N_rmse = 100
-=======
-# # # # RMSE ########################
-N_rmse = 1500
->>>>>>> 8c3fe9ba3f17c9fafb5d0ce4f351c1220eed3db6
+N_rmse = 9
 y_rmse_bs = np.zeros(N_rmse)
 y_rmse_temp = np.zeros(N_rmse)
 y_rmse_nudge = np.zeros(N_rmse)
@@ -67,14 +60,7 @@ for i in range(N_rmse):
         y_rmse_temp[i] += sqrt(1/y_e_temp_time.shape[1])*np.linalg.norm(y_exact[i, :]-y_e_temp_time[i,p, :])/np.linalg.norm(y_exact[i,:])
         y_rmse_nudge[i] += sqrt(1/y_e_temp_time.shape[1])*np.linalg.norm(y_exact[i, :]-y_e_nudge_time[i,p, :])/np.linalg.norm(y_exact[i,:])
 
-<<<<<<< HEAD
-
-
-
 N_df = 1
-=======
-N_df = 100
->>>>>>> 8c3fe9ba3f17c9fafb5d0ce4f351c1220eed3db6
 
 y_rmse_bs_df = pd.DataFrame(y_rmse_bs)
 y_rmse_bs_roll =y_rmse_bs_df.rolling(N_df).mean()
