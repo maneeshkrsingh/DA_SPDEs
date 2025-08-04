@@ -1,19 +1,32 @@
+from ctypes import sizeof
+from fileinput import filename
 from firedrake import *
+from pyop2.mpi import MPI
 from nudging import *
+import numpy as np
+import matplotlib.pyplot as plt
 from firedrake.output import VTKFile
 from nudging.models.stochastic_Camassa_Holm import Camsholm
-import numpy as np
-from math import pi
+
+
 import os
 
 # Output directory
 # output_dir = "../../DA_Results/SCH/SFLT/NewGaussianwide/SCH_particles/"
-output_dir = "../../DA_Results/SCH/TruthAntiPeakon/SCH_particles/"
+output_dir = "../../DA_Results/SCH/SALT/Zerovelocity/SCH_particles/"
 os.makedirs(output_dir, exist_ok=True)
 
+
+
+"""
+create some synthetic data/observation data at T_1 ---- T_Nobs
+Pick initial conditon
+run model, get obseravation
+add observation noise N(0, sigma^2)
+"""
 # Simulation parameters
-N_obs = 4*2500
-Nensemble = 1
+N_obs = 4*4000
+Nensemble = 5
 nsteps = 1
 xpoints = 5000
 Ld = 40.0
@@ -38,7 +51,7 @@ ic_dict = {'two_peaks': (0.2*2/(exp(x-403./15.*40./Ld) + exp(-x+403./15.*40./Ld)
                'one_peak': 0.5*2/(exp(x-203./15.*40./Ld)+exp(-x+203./15.*40./Ld)),
                'proper_peak': 0.5*2/(exp(x-Ld/4)+exp(-x+Ld/4)),
                'new_peak': 0.5*2/(exp((x-Ld/4)/peak_width)+exp((-x+Ld/4)/peak_width)),
-               'peakon_antipeakon':  exp(-(1/alpha)*abs(x-Ld/4.))-exp(-(1/alpha)*abs(x-3*Ld/4.)),
+               'peakon_antipeakon':exp(-(1/alpha) * abs(x - Ld/4.)) -  exp(-(1/alpha) * abs(x - 3*Ld/4.)),
                'flat': Constant(2*pi**2/(9*40**2)),
                'fast_flat': Constant(0.1),
                'coshes': Constant(2000)*cosh((2000**0.5/2)*(x-0.75))**(-2)+Constant(1000)*cosh(1000**0.5/2*(x-0.25))**(-2),
@@ -60,65 +73,115 @@ ic_dict = {'two_peaks': (0.2*2/(exp(x-403./15.*40./Ld) + exp(-x+403./15.*40./Ld)
                'antisymmetric': 1/(exp((x-Ld/4)/Ld)+exp((-x+Ld/4)/Ld)) - 1/(exp((Ld-x-Ld/4)/Ld)+exp((Ld+x+Ld/4)/Ld))}
 
 
-###################  To generate data only for obs data points 
+u_ic = ic_dict['peakon_antipeakon']  # initial condition
 X_truth = model.allocate()
 _, u0 = X_truth[0].split()
-u_ic = ic_dict['peakon_antipeakon']  # Choose the initial condition from the dictionary
 
-# Function space
-V = FunctionSpace(model.mesh, "CG", 1)
+# Use a linear function space on mesh vertices (assuming CG1)
+V = FunctionSpace(model.mesh, "CG", 1)  
+L = 40.0
+N = V.dim()  # number of DOFs in V, should match len(Zall)
 
-# Output function containers
-f_mean = Function(V, name="particle_mean")
-f_std = Function(V, name="particle_std")
-f_upper = Function(V, name="mean_plus_std")
-f_lower = Function(V, name="mean_minus_std")
+# Create x_pos assuming uniform periodic mesh
+x_pos = np.linspace(0, L, N, endpoint=False)  # match length of solution vectors
 
-# VTK writers
-mean_file = VTKFile(f"{output_dir}/particle_mean.pvd")
-upper_file = VTKFile(f"{output_dir}/particle_mean_plus_std.pvd")
-lower_file = VTKFile(f"{output_dir}/particle_mean_minus_std.pvd")
+peak_positions = []
 
-# Time stepping configuration
+print("Domain min x:", x_pos.min(), "max x:", x_pos.max())
+print("Number of DOFs in function space:", N)
+
 ndump = 100
-n_time_steps = N_obs // ndump
-particle_values = np.zeros((Nensemble, n_time_steps, V.dim()))
 
-# === Ensemble simulation and saving ===
-for p in range(Nensemble):
-    u0.interpolate(u_ic)
-    dumpn = 0
-    time_index = 0
+for p in ProgressBar("Ensemble members").iter(range(Nensemble)):
+    u0.interpolate(0.0)  # Set initial condition for each particle
+    dumpn = 0  
+    time_index = 0  
     particle_file = VTKFile(f"{output_dir}/particle_{p}.pvd")
     f = Function(V, name=f"particle_{p}")
-
-    for i in ProgressBar(f"Ensemble member {p}").iter(range(N_obs)):
+	# --- Add this for energy storage ---
+    energy_one = []
+    energy_two = []
+    total_energy = []  # List to store total energy values at each timestep
+    for i in ProgressBar(f"Timestep {p}").iter(range(N_obs)):
         model.randomize(X_truth)
         model.run(X_truth, X_truth)
-        
 
         _, z = X_truth[0].subfunctions
+        if p ==0:
+            E_1 = assemble((z*z)*dx)
+            E_2 = assemble((z.dx(0)*z.dx(0))*dx)
+		    # --- Save energy and time ---
+            energy_one.append(E_1)
+            energy_two.append(E_2)
+            total_energy.append(E_1 + E_2)
         Zall = z.dat.data_ro[:]
+
+        #print(f"Timestep {i}: Length of Zall = {len(Zall)}, Length of x_pos = {len(x_pos)}")
+
+        # Find index of max (peak)
+        idx_max = np.argmax(Zall)
+        x_star = x_pos[idx_max]
+
+        peak_positions.append((i, x_star))
+
+        # Save data for visualization (optional)
         f.dat.data[:] = Zall
 
+        # # Uncomment to save VTK every ndump steps
         dumpn += 1
         if dumpn == ndump:
             particle_file.write(f, time=time_index)
-            particle_values[p, time_index, :] = Zall.copy()
             time_index += 1
             dumpn = 0
-# === Compute and write ensemble statistics ===
-for i in range(N_obs):
-    mean_data = np.mean(particle_values[:, i, :], axis=0)
-    std_data = np.std(particle_values[:, i, :], axis=0)
+# # After time loop, convert to numpy arrays
+# energy_one = np.array(energy_one)
+# energy_two = np.array(energy_two)
+# # # Save energy arrays to disk
+np.save("zeroSFLT_peakanti_energy_one.npy", np.array(energy_one))
+np.save("zeroSFLT_peakanti_energy_two.npy", np.array(energy_two))
+np.save("zeroSFLT_peakanti_TotalEnergy.npy",   np.array(total_energy))
+# Convert peak positions list to array
+peak_positions = np.array(peak_positions)
+timesteps = peak_positions[:, 0]
+x_star_vals = peak_positions[:, 1]
 
-    f_mean.dat.data[:] = mean_data
-    f_std.dat.data[:] = std_data
-    f_upper.dat.data[:] = mean_data + 2 * std_data
-    f_lower.dat.data[:] = mean_data - 2 * std_data
+# Plot soliton peak trajectory (x vs t)
+# plt.figure(figsize=(6, 4))
+# plt.plot(x_star_vals, timesteps, marker='o', linestyle='-', color='black')
+# plt.xlabel(r'Peak position $x^*(t)$')
+# plt.ylabel(r'Time $t$')
+# plt.title('Trajectory of soliton peak in space-time')
+# plt.grid(True)
+# plt.tight_layout()
+# plt.show()
 
-    # Write to file every ndump steps
-    if i % ndump == 0:
-        mean_file.write(f_mean, time=i)
-        upper_file.write(f_upper, time=i)
-        lower_file.write(f_lower, time=i)
+
+
+import matplotlib.cm as cm
+
+plt.figure(figsize=(8, 5))
+
+# Normalize timesteps for colormap
+norm = plt.Normalize(timesteps.min(), timesteps.max())
+cmap = cm.viridis
+
+# Scatter plot with color gradient by time
+sc = plt.scatter(x_star_vals, timesteps, c=timesteps, cmap=cmap, norm=norm, s=40, edgecolor='k', alpha=0.85, label='Peak position')
+
+# Connect points with a smooth line
+plt.plot(x_star_vals, timesteps, color='gray', linestyle='--', alpha=0.6)
+
+plt.xlabel(r'Peak position $x^*(t)$', fontsize=14)
+plt.ylabel(r'Time $t$', fontsize=14)
+plt.title('Soliton Peak Trajectory in Space-Time', fontsize=16)
+plt.colorbar(sc, label='Time step')
+plt.grid(visible=True, linestyle=':', alpha=0.7)
+
+# Add annotation for peak position range
+xmin, xmax = np.min(x_star_vals), np.max(x_star_vals)
+plt.text(xmax*0.5, timesteps.max()*0.9, f'Peak position range:\n[{xmin:.2f}, {xmax:.2f}]', 
+         fontsize=12, bbox=dict(boxstyle="round,pad=0.3", fc="lightyellow", ec="gray", alpha=0.7))
+
+plt.tight_layout()
+plt.show()
+
