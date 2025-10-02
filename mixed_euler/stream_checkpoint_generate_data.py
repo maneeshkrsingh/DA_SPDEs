@@ -20,22 +20,31 @@ particle_init = VTKFile("../../DA_Results/2DEuler_mixed/paraview_saltadtnoise/pa
 
 Print = PETSc.Sys.Print
 
-nensemble = [3]*30
+params = {}
+
+nsteps = 5
+params["nsteps"] = nsteps
+xpoints = 16    # no of obervation points 
+params["xpoints"] = xpoints
+dt = 1/40
+params["dt"] = dt
+dw_scale = 1.25
+params["noise_scale"] = dw_scale
+nensemble = [2]*30
 N_obs = 250
 N_init = 250
-n = 16
-nsteps = 5
-dt = 1/40
 
 
 
+
+
+# model stetup
 comm=fd.COMM_WORLD
-#mesh = fd.UnitSquareMesh(n, n, quadrilateral = True, comm=comm, name ="mesh2d_per")
-
-model = Euler_mixSD(n, nsteps=nsteps,  dt = dt, noise_scale=1.25, salt=False,  lambdas=True)
-
+model = Euler_mixSD(xpoints, nsteps=nsteps,  dt = dt, noise_scale=dw_scale, salt=False,  lambdas=True)
 model.setup(comm=fd.COMM_WORLD)
 mesh = model.mesh
+
+# to use in symbolic space varaible
 x = SpatialCoordinate(mesh)
 ############################# initilisation ############
 X0_truth = model.allocate()
@@ -43,8 +52,10 @@ q0,psi0 = X0_truth[0].subfunctions
 q0.interpolate(sin(8*pi*x[0])*sin(8*pi*x[1])+0.4*cos(6*pi*x[0])*cos(6*pi*x[1])
                 +0.3*cos(10*pi*x[0])*cos(4*pi*x[1]) +0.02*sin(2*pi*x[0])+ 0.02*sin(2*pi*x[1]))
 
+# to calculate velocity
 def gradperp(u):
     return fd.as_vector((-u.dx(1), u.dx(0)))
+
 # #To store vorticity values 
 psi_VOM = model.obs()
 psi_VOM_out = Function(model.VVOM_out)
@@ -106,7 +117,7 @@ with fd.CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble
         else:
             Print("Initlisation of truth")
         X_particle[0].assign(X0_truth[0])
-        for j in range(ndump):
+        for j in fd.ProgressBar("").iter(range(ndump)):
             model.randomize(X_particle)
             model.run(X_particle, X_particle)
         q,psi = model.qpsi1.subfunctions
@@ -156,7 +167,7 @@ for i in fd.ProgressBar("").iter(range(N_obs)):
     if comm.rank == 0:
         psi_true_all[i,:]= psi_true
         #Print('psi_true_ABS', psi_true.max(), psi_true.min())
-        psi_noise = np.random.normal(0.0, 0.001, (int(n/4+1)**2 ) )# mean = 0, sd = 0.05
+        psi_noise = np.random.normal(0.0, 0.001, (int(xpoints/4+1)**2 ) )# mean = 0, sd = 0.05
         #Print('Noise', psi_noise)
         psi_max = np.abs(psi_true).max()
         psi_obs = psi_true + (1/psi_max)*psi_noise*psi_true # To get similar boundary values as truth 

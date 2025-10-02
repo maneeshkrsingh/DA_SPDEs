@@ -4,6 +4,19 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+# save the initial conditiony_init 
+
+y_init = np.load("../../DA_KS/particle_init.npy")
+print("initial condition shape", y_init.shape)
+plt.plot(y_init[0,:], 'r-', label='Initial condition')
+plt.xlabel("Spatial points")
+plt.ylabel("Value")
+plt.title('Initial condition')
+plt.legend()
+plt.show()
+
+quit()
+
 
 y_exact = np.load('y_true.npy')
 y_obs = np.load('y_obs.npy')

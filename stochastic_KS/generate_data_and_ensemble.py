@@ -22,7 +22,7 @@ add observation noise N(0, sigma^2)
 
 params = {}
 
-nsteps = 5
+nsteps = 1
 params["nsteps"] = nsteps
 xpoints = 10    # no of obervation points 
 params["xpoints"] = xpoints
@@ -32,7 +32,7 @@ dt = 0.005
 params["dt"] = dt
 nu = 0.02923
 params["nu"] = nu
-dc = 2.5
+dc = 0.0005
 params["dc"] = dc
 
 model = KS_CIP(nsteps, xpoints, seed=12353, lambdas=True,
@@ -43,20 +43,31 @@ u_in = X_start[0] # u_initilization
 x, = fd.SpatialCoordinate(model.mesh)
 
 # Setup initilization
-u_in.project(0.2*2/(fd.exp(x-403./15.) + fd.exp(-x+403./15.)) + 0.5*2/(fd.exp(x-203./15.)+fd.exp(-x+203./15.)))
+# u_in.project(0.2*2/(fd.exp(10*x-403./15.) + fd.exp(-10*x+403./15.)) + 0.5*2/(fd.exp(10*x-203./15.)+fd.exp(-10*x+203./15.)))
+u_in.project(fd.Constant(0.0))
 
 
 print("Finding an initial state.")
+particle_inittime = []
 for i in fd.ProgressBar("").iter(range(200)):
     model.randomize(X_start)
     model.run(X_start, X_start)  # run method for every time step
-    #particle_init = model.obs().dat.data[:]
+    uout = fd.Function(model.V, name="particle_init")
+    uout.interpolate(X_start[0])
+    particle_init = uout.dat.data[:]
+    particle_inittime.append(particle_init)
     # u = fd.Function(model.Vdg)
     # u.rename('state')
     # u.interpolate(model.un)
     # truth_init.write(u)
 
+# save the initial condition
+np.save("../../DA_KS/particle_init.npy", np.array(particle_inittime))
+
 print("generating ensemble.")
+
+quit()
+
 
 Nensemble = 90  # size of the ensemble
 
