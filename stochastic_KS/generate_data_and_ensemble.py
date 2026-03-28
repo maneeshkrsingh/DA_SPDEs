@@ -22,7 +22,7 @@ add observation noise N(0, sigma^2)
 
 params = {}
 
-nsteps = 1
+nsteps = 5
 params["nsteps"] = nsteps
 xpoints = 10    # no of obervation points 
 params["xpoints"] = xpoints
@@ -32,7 +32,7 @@ dt = 0.005
 params["dt"] = dt
 nu = 0.02923
 params["nu"] = nu
-dc = 0.0005
+dc = 2.5
 params["dc"] = dc
 
 model = KS_CIP(nsteps, xpoints, seed=12353, lambdas=True,
@@ -43,8 +43,8 @@ u_in = X_start[0] # u_initilization
 x, = fd.SpatialCoordinate(model.mesh)
 
 # Setup initilization
-# u_in.project(0.2*2/(fd.exp(10*x-403./15.) + fd.exp(-10*x+403./15.)) + 0.5*2/(fd.exp(10*x-203./15.)+fd.exp(-10*x+203./15.)))
-u_in.project(fd.Constant(0.0))
+u_in.project(0.2*2/(fd.exp(x-403./15.) + fd.exp(-x+403./15.)) + 0.5*2/(fd.exp(x-203./15.)+fd.exp(-x+203./15.)))
+#u_in.project(fd.Constant(0.0))
 
 
 print("Finding an initial state.")
@@ -66,7 +66,7 @@ np.save("../../DA_KS/particle_init.npy", np.array(particle_inittime))
 
 print("generating ensemble.")
 
-quit()
+# quit()
 
 
 Nensemble = 90  # size of the ensemble
@@ -132,8 +132,11 @@ with fd.CheckpointFile("../../DA_KS/ks_ensemble.h5", 'w') as afile:
         uout = fd.Function(model.V, name="particle_init")
         uout.interpolate(X[0])
         afile.save_function(uout, idx=i)
-        particle_in[:,i] = uout.dat.data[:] # to plot initlization of particle and truth
+        particle_in[:,i] = uout.dat.data[:] # to plot initlization of particle and truth at all points 
     np.save("../../DA_KS/particle_in.npy", particle_in)
+
+
+quit()
 
 print("Generating the observational data.")
 N_obs = 2000
