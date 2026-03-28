@@ -52,7 +52,7 @@ params["dt"] = dt
 
 
 # Model configuration
-dw_scale = 0.5
+dw_scale = 1.0
 #dw_scale = 0.0
 params["noise_scale"] = dw_scale
 
@@ -217,7 +217,7 @@ psi_particle_init = np.zeros((total_particles, len(psi_init)))
 X_particle = model.allocate()
 particle_count = 0
 
-ndump = 5  # dump data
+ndump = 10  # dump data
 
 # Generate ensemble particles + truth
 with fd.CheckpointFile("../../DA_Results/2DEuler_mixed/checkpoint_files/ensemble_init.h5", 'w') as afile:
