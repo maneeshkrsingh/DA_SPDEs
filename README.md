@@ -3,10 +3,10 @@
 ## 👋 Overview
 This repository provides forward models for stochastic partial differential equations (SPDEs) used in data assimilation frameworks.
 
-It is designed to support:
-- Nudging-based data assimilation
-- Particle filtering methods
-- Ensemble-based simulation workflows
+It supports:
+- Nudging-based data assimilation  
+- Particle filtering methods  
+- Ensemble-based simulation workflows  
 
 ---
 
@@ -21,8 +21,60 @@ This repository focuses on building reliable forward solvers that can be integra
 - Modular forward models for SPDE systems  
 - Designed for integration with data assimilation methods  
 - Supports ensemble simulations  
-- Compatible with scalable solvers (Firedrake / PETSc)
+- Compatible with scalable solvers (Firedrake / PETSc)  
 
 ---
 
 ## 📁 Repository Structure
+
+    DA_SPDEs/
+    ├── bs_assimilate_errorcompare.py   # Example assimilation/analysis script
+    ├── other scripts and models        # Forward models and experiments
+
+---
+
+## 🧪 Methods
+The implementations combine:
+- Stochastic PDE modelling  
+- Numerical discretisation (FEM / DG concepts)  
+- Ensemble-based simulation  
+
+These forward models are designed to work with:
+- Nudging schemes  
+- Particle filters  
+- Bayesian inference methods  
+
+---
+
+## 🚀 Getting Started
+
+### Requirements
+- Python  
+- NumPy / SciPy  
+- Firedrake (or similar FEM framework)  
+- PETSc  
+
+### Example usage
+
+    python bs_assimilate_errorcompare.py
+
+---
+
+## 📊 Applications
+- Data assimilation for stochastic systems  
+- Uncertainty quantification  
+- Scientific machine learning  
+- Fluid and geophysical modelling  
+
+---
+
+## 👤 Author
+Maneesh Kumar Singh  
+
+- https://github.com/maneeshkrsingh  
+- https://maneeshkrsingh.github.io  
+
+---
+
+## 📄 License
+MIT License
